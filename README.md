@@ -1,98 +1,192 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# NestJS Module for Solana Kit
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+[![Test & Build](https://github.com/haihv/nestjs-solana-kit/actions/workflows/test.yml/badge.svg)](https://github.com/haihv/nestjs-solana-kit/actions/workflows/test.yml)
+[![npm version](https://badge.fury.io/js/nestjs-solana-kit.svg)](https://badge.fury.io/js/nestjs-solana-kit)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Type-safe NestJS integration for Solana blockchain with `@solana/kit` v5.x. Provides ready-to-use services for accounts, transactions, blocks, programs, and real-time subscriptions with full TypeScript support and dependency injection.
 
-## Description
+## Features
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **Modern SDK Integration**: Built on `@solana/kit` v5.x (Solana's new modular web3.js architecture) with full TypeScript support
+- **Type-Safe with Derived Types**: All types are automatically derived from `@solana/kit` using TypeScript utility types (ReturnType, Awaited, Omit, etc.), ensuring perfect compatibility and automatic updates when the SDK changes
+- **NestJS Native**: Designed for NestJS with dependency injection and module configuration
+- **High-Level API**: Simplified methods for common Solana operations
+- **Comprehensive Services**:
+  - Connection management
+  - Account queries and balance checks
+  - Block and slot information
+  - Transaction building, sending, and confirmation with automatic retry logic
+  - Program interactions and instruction creation
+  - WebSocket subscriptions for real-time updates
+- **Flexible Configuration**: Both static and async module registration
+- **Production Ready**: Built-in error handling, logging, and retry mechanisms
 
-## Project setup
+## Type Safety & Derivation
 
-```bash
-$ pnpm install
+This library takes a unique approach to type safety by **deriving all types directly from `@solana/kit`** rather than manually redefining them. This ensures:
+
+- ✅ **Perfect compatibility** - Types always match the actual SDK behavior
+- ✅ **Automatic updates** - When `@solana/kit` updates, types update automatically
+- ✅ **Zero drift** - No manual type maintenance or version sync issues
+- ✅ **IDE support** - Full autocomplete and type checking from the official SDK
+
+### Examples of Type Derivation
+
+```typescript
+// AccountInfo: Derived by combining base types from @solana/kit
+export type AccountInfo = AccountInfoBase & AccountInfoWithBase64EncodedData;
+
+// BlockhashInfo: Extracted from API return type
+export type BlockhashInfo = ReturnType<GetLatestBlockhashApi['getLatestBlockhash']>['value'];
+
+// BlockInfo variants: Base type + specific transaction details
+export type BlockInfo = Omit<NonNullable<ReturnType<GetBlockApi['getBlock']>>, 'transactions'>;
+export type BlockInfoWithSignatures = BlockInfo & { signatures: readonly Base58EncodedBytes[] };
+export type BlockInfoWithTransactions = BlockInfo & { transactions: readonly TransactionForFullBase58<void>[] };
+
+// Subscription types: Direct from notification APIs
+export type AccountNotification = SolanaRpcResponse<AccountInfo>;
+export type SignatureNotification = ReturnType<SignatureNotificationsApi['signatureNotifications']>;
 ```
 
-## Compile and run the project
+### Generic Type Support
 
-```bash
-# development
-$ pnpm run start
+The library uses TypeScript generics to provide context-aware return types:
 
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+```typescript
+// getBlock returns different types based on the includeTransactions parameter
+const blockWithTxs = await solanaBlock.getBlock(slot, true);   // BlockInfoWithTransactions
+const blockWithSigs = await solanaBlock.getBlock(slot, false); // BlockInfoWithSignatures
 ```
 
-## Run tests
+## Installation
 
 ```bash
-# unit tests
-$ pnpm run test
+# npm
+npm install nestjs-solana-kit @solana/kit
 
-# e2e tests
-$ pnpm run test:e2e
+# yarn
+yarn add nestjs-solana-kit @solana/kit
 
-# test coverage
-$ pnpm run test:cov
+# pnpm
+pnpm add nestjs-solana-kit @solana/kit
 ```
 
-## Deployment
+**Peer Dependencies:**
+- `@nestjs/common` (^10.0.0 || ^11.0.0) - NestJS framework
+- `@nestjs/core` (^10.0.0 || ^11.0.0) - NestJS core
+- `reflect-metadata` (^0.1.13 || ^0.2.0) - Reflection metadata
+- `rxjs` (^7.0.0) - Reactive extensions
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+**Note:** This library supports both NestJS v10 and v11. Development uses the latest v11 for best DX while maintaining backward compatibility with v10.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Quick Start
+
+### 1. Static Module Registration
+
+For simple applications with hardcoded configuration:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { SolanaModule } from 'nestjs-solana-kit';
+
+@Module({
+  imports: [
+    SolanaModule.register({
+      rpcUrl: 'https://api.devnet.solana.com',
+      cluster: 'devnet',
+      commitment: 'confirmed',
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### 2. Async Module Registration
+
+For applications using `ConfigModule` or dynamic configuration:
+
+```typescript
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { SolanaModule } from 'nestjs-solana-kit';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot(),
+    SolanaModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        rpcUrl: configService.get('SOLANA_RPC_URL'),
+        cluster: configService.get('SOLANA_CLUSTER'),
+        commitment: 'confirmed',
+        wsUrl: configService.get('SOLANA_WS_URL'),
+      }),
+      inject: [ConfigService],
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+## Documentation
+
+- **[Services Reference](./docs/SERVICES.md)** - Complete API documentation for all services and configuration options
+
+## CI/CD & Publishing
+
+This repository uses GitHub Actions for automated testing and publishing:
+
+- **Test Workflow** (`test.yml`): Runs on every push and pull request
+  - Tests on Node 18 and 20
+  - Linting, unit tests, and build verification
+  - Code coverage reports uploaded to Codecov
+
+- **Publish Workflow** (`publish.yml`): Triggered on version tags (v*.*.*)
+  - Runs full test suite before publishing
+  - Automatically publishes to npm
+  - Creates GitHub releases
+
+### Publishing a New Version
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+# 1. Create and push a version tag
+git tag v0.2.0
+git push origin v0.2.0
+
+# GitHub Actions will automatically:
+# - Run all tests
+# - Build the package
+# - Publish to npm
+# - Create a GitHub release
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Development
 
-## Resources
+```bash
+# Install dependencies
+pnpm install
 
-Check out a few resources that may come in handy when working with NestJS:
+# Run tests
+pnpm test
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+# Run tests in watch mode
+pnpm test:watch
 
-## Support
+# Generate test coverage
+pnpm test:cov
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# Lint code
+pnpm lint
 
-## Stay in touch
+# Format code
+pnpm format
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+# Build package
+pnpm build
+```
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+MIT
