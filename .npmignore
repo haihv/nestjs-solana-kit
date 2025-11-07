@@ -1,0 +1,47 @@
+# Source files
+src/
+test/
+
+# Config files
+.claude/
+.eslintrc.js
+eslint.config.mjs
+.prettierrc
+tsconfig.json
+tsconfig.build.json
+nest-cli.json
+
+# Documentation (keep README.md)
+*.md
+!README.md
+
+# Development files
+*.spec.ts
+*.test.ts
+coverage/
+.nyc_output/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Other
+node_modules/
+.git/
+.gitignore
