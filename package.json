@@ -1,7 +1,7 @@
 {
   "name": "nestjs-solana-kit",
   "version": "0.1.0",
-  "description": "A comprehensive NestJS library for Solana blockchain integration using @solana/kit v4.x",
+  "description": "A comprehensive NestJS library for Solana blockchain integration using @solana/kit v5.x",
   "author": "haihv",
   "license": "MIT",
   "main": "dist/index.js",
@@ -32,7 +32,7 @@
   },
   "homepage": "https://github.com/haihv/nestjs-solana-kit#readme",
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
   "scripts": {

@@ -12,11 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This is the first public release of nestjs-solana-kit, a comprehensive NestJS library for Solana blockchain integration.
 
 **Commits:**
-- `2187734` chore: setup project config and dev tools
-- `43e4e7a` ci: add github actions workflows
-- `b94ebc8` feat: implement nestjs solana integration library
-- `d225696` build: update dependencies and prepare for npm release
-- `62615c2` docs: add comprehensive project documentation
+- `1ed001e` chore: setup project config and remove boilerplate
+- `746b219` ci: add github actions workflows
+- `874b70c` feat: implement nestjs solana integration library
+- `0a36d38` build: update dependencies and prepare for release
+- `f101ac0` docs: add comprehensive project documentation
 
 ### Added
 
@@ -57,7 +57,7 @@ This is the first public release of nestjs-solana-kit, a comprehensive NestJS li
 - npm registry configuration
 - TypeScript strict compiler options
 - Build scripts for library compilation
-- Test automation on Node 18, 20, 24
+- Test automation on Node 20, 22, 24 (LTS versions)
 
 ### Features
 
@@ -71,7 +71,7 @@ This is the first public release of nestjs-solana-kit, a comprehensive NestJS li
 
 ### Versioning
 
-- Node.js: 18+, 20+, 24+ (LTS)
+- Node.js: >= 20.0.0 (tested on 20, 22, 24 LTS)
 - NestJS: ^10.0.0 || ^11.0.0
 - TypeScript: 5.9+
 - Development: Latest versions (Jest 30, ESLint 9, Prettier 3)
