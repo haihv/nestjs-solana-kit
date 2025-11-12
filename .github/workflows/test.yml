@@ -66,34 +66,17 @@ jobs:
 
       - name: Parse coverage report
         if: always()
-        run: |
-          # Parse coverage-final.json to calculate line coverage percentage
-          coverage=$(node -e "
-            const json = require('./coverage/coverage-final.json');
-            let totalLines = 0;
-            let coveredLines = 0;
-
-            Object.values(json).forEach(file => {
-              if (file.s) {
-                Object.values(file.s).forEach(count => {
-                  totalLines++;
-                  if (count > 0) coveredLines++;
-                });
-              }
-            });
-
-            const percent = totalLines > 0 ? Math.round((coveredLines / totalLines) * 100) : 0;
-            console.log(percent);
-          ")
-          echo "COVERAGE_PERCENT=$coverage" >> $GITHUB_ENV
+        run: node scripts/parse-coverage.js >> $GITHUB_ENV
 
       - name: Add coverage to job summary
         if: always()
         run: |
-          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "## Coverage Report - Node ${{ matrix.node-version }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Node ${{ matrix.node-version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Coverage |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Statement Coverage | ${{ env.COVERAGE_PERCENT }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Statements | ${{ env.COVERAGE_STATEMENTS }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Functions | ${{ env.COVERAGE_FUNCTIONS }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branches | ${{ env.COVERAGE_BRANCHES }}% |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[📊 Download full coverage report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "[📊 View detailed report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
