@@ -56,10 +56,27 @@ jobs:
       - name: Build package
         run: pnpm build
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
-          files: ./coverage/coverage-final.json
-          flags: unittests
-          name: codecov-umbrella
-        continue-on-error: true
+          name: coverage-${{ matrix.node-version }}
+          path: coverage/
+          retention-days: 30
+
+      - name: Parse coverage report
+        if: always()
+        run: |
+          coverage=$(node -e "const json = require('./coverage/coverage-final.json'); const lines = Object.values(json).reduce((sum, file) => sum + file.l.coverage, 0) / Object.keys(json).length; console.log(Math.round(lines))")
+          echo "COVERAGE_PERCENT=$coverage" >> $GITHUB_ENV
+
+      - name: Add coverage to job summary
+        if: always()
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Node ${{ matrix.node-version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Line Coverage | ${{ env.COVERAGE_PERCENT }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[Download full coverage report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
