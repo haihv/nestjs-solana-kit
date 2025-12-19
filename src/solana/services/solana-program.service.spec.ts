@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { address } from '@solana/kit';
 import type { AccountInfoWithPubkey } from '@solana/kit';
@@ -13,21 +14,21 @@ const OWNER_ID = 'BPFLoader1111111111111111111111111111111111';
 const PROGRAM_ACCOUNT_ID = 'Account1111111111111111111111111111111111111';
 
 const createMockRpc = (accounts: AccountInfoWithPubkey<AccountInfo>[]) => ({
-  getProgramAccounts: jest.fn(() => ({
-    send: jest.fn().mockResolvedValue(accounts),
+  getProgramAccounts: vi.fn(() => ({
+    send: vi.fn().mockResolvedValue(accounts),
   })),
 });
 
 describe('SolanaProgramService', () => {
   let service: SolanaProgramService;
-  let accountServiceMock: { getAccountInfo: jest.Mock };
+  let accountServiceMock: { getAccountInfo: Mock };
   let rpcServiceMock: { rpc: ReturnType<typeof createMockRpc> };
   let mockRpc: ReturnType<typeof createMockRpc>;
   let mockAccountInfo: AccountInfo;
   let programAccountsResponse: AccountInfoWithPubkey<AccountInfo>[];
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockAccountInfo = {
       executable: true,
@@ -47,7 +48,7 @@ describe('SolanaProgramService', () => {
     mockRpc = createMockRpc(programAccountsResponse);
 
     accountServiceMock = {
-      getAccountInfo: jest.fn().mockResolvedValue(mockAccountInfo),
+      getAccountInfo: vi.fn().mockResolvedValue(mockAccountInfo),
     };
     rpcServiceMock = {
       get rpc() {
@@ -68,7 +69,7 @@ describe('SolanaProgramService', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('returns program info when the account exists', async () => {
@@ -138,7 +139,7 @@ describe('SolanaProgramService', () => {
   it('propagates RPC errors when fetching program accounts fails', async () => {
     const rpcError = new Error('rpc failure');
     mockRpc.getProgramAccounts.mockReturnValueOnce({
-      send: jest.fn().mockRejectedValue(rpcError),
+      send: vi.fn().mockRejectedValue(rpcError),
     });
 
     await expect(service.getProgramAccounts(PROGRAM_ID)).rejects.toThrow(

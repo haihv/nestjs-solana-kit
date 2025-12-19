@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SolanaUtilsService } from './solana-utils.service';
 import { SolanaRpcService } from './solana-rpc.service';
@@ -13,7 +14,7 @@ describe('SolanaUtilsService', () => {
   let blockService: SolanaBlockService;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,7 +39,7 @@ describe('SolanaUtilsService', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('should be defined', () => {
@@ -726,7 +727,9 @@ describe('SolanaUtilsService', () => {
 
   describe('error logging and handling', () => {
     it('should log errors when address conversion fails', () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
 
       expect(() => {
         service.toAddress('invalid-address-too-short');

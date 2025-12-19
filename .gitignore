@@ -43,6 +43,7 @@ lerna-debug.log*
 .tmp
 .cache
 .claude
+.vite
 
 # Runtime data
 pids

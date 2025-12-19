@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SolanaConfigService } from './solana-config.service';
 import { SolanaRpcService } from './solana-rpc.service';
@@ -9,11 +10,11 @@ describe('SolanaRpcService', () => {
   let configService: SolanaConfigService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Devnet cluster configuration', () => {
