@@ -3,6 +3,7 @@
  * This file provides reusable test data, mock objects, and factory functions
  * to ensure consistency across all test suites
  */
+import { vi } from 'vitest';
 
 // ============================================================================
 // ADDRESS CONSTANTS
@@ -100,7 +101,7 @@ export const TEST_RPC_OPTIONS = {
  */
 /* istanbul ignore next */
 export const createPendingResponse = <T>(value: T) => ({
-  send: jest.fn().mockResolvedValue(value),
+  send: vi.fn().mockResolvedValue(value),
 });
 
 // ============================================================================

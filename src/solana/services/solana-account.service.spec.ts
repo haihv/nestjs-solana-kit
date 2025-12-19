@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SolanaAccountService } from './solana-account.service';
 import { SolanaRpcService } from './solana-rpc.service';
@@ -5,15 +6,15 @@ import { SolanaUtilsService } from './solana-utils.service';
 import type { Address } from '@solana/kit';
 
 const createPendingResponse = <T>(value: T) => ({
-  send: jest.fn().mockResolvedValue(value),
+  send: vi.fn().mockResolvedValue(value),
 });
 
 interface MockRpc {
-  getBalance: jest.Mock;
-  getAccountInfo: jest.Mock;
-  getMultipleAccounts: jest.Mock;
-  getTokenAccountsByOwner: jest.Mock;
-  getMinimumBalanceForRentExemption: jest.Mock;
+  getBalance: Mock;
+  getAccountInfo: Mock;
+  getMultipleAccounts: Mock;
+  getTokenAccountsByOwner: Mock;
+  getMinimumBalanceForRentExemption: Mock;
 }
 
 describe('SolanaAccountService', () => {
@@ -22,14 +23,14 @@ describe('SolanaAccountService', () => {
   let mockRpc: MockRpc;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Create a fully mocked RPC object
     mockRpc = {
-      getBalance: jest
+      getBalance: vi
         .fn()
         .mockReturnValue(createPendingResponse({ value: BigInt(1000000000) })),
-      getAccountInfo: jest.fn().mockReturnValue(
+      getAccountInfo: vi.fn().mockReturnValue(
         createPendingResponse({
           value: {
             address: '11111111111111111111111111111111' as Address,
@@ -40,7 +41,7 @@ describe('SolanaAccountService', () => {
           },
         }),
       ),
-      getMultipleAccounts: jest.fn().mockReturnValue(
+      getMultipleAccounts: vi.fn().mockReturnValue(
         createPendingResponse({
           value: [
             {
@@ -60,7 +61,7 @@ describe('SolanaAccountService', () => {
           ],
         }),
       ),
-      getTokenAccountsByOwner: jest.fn().mockReturnValue(
+      getTokenAccountsByOwner: vi.fn().mockReturnValue(
         createPendingResponse({
           value: [
             {
@@ -74,7 +75,7 @@ describe('SolanaAccountService', () => {
           ],
         }),
       ),
-      getMinimumBalanceForRentExemption: jest
+      getMinimumBalanceForRentExemption: vi
         .fn()
         .mockReturnValue(createPendingResponse(BigInt(890880))),
     };
@@ -111,7 +112,7 @@ describe('SolanaAccountService', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('should be defined', () => {
@@ -142,7 +143,7 @@ describe('SolanaAccountService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getBalance.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(
@@ -223,7 +224,7 @@ describe('SolanaAccountService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getAccountInfo.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(
@@ -291,7 +292,7 @@ describe('SolanaAccountService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getMultipleAccounts.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(
@@ -358,7 +359,7 @@ describe('SolanaAccountService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getTokenAccountsByOwner.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(
@@ -402,7 +403,7 @@ describe('SolanaAccountService', () => {
 
     it('should return false on RPC error', async () => {
       mockRpc.getAccountInfo.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       const exists = await service.accountExists(
@@ -448,7 +449,7 @@ describe('SolanaAccountService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getMinimumBalanceForRentExemption.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(

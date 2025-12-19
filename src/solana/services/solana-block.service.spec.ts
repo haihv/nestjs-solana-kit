@@ -1,23 +1,24 @@
+import { vi, type Mock } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SolanaBlockService } from './solana-block.service';
 import { SolanaRpcService } from './solana-rpc.service';
 import type { Blockhash } from '@solana/kit';
 
 const createPendingResponse = <T>(value: T) => ({
-  send: jest.fn().mockResolvedValue(value),
+  send: vi.fn().mockResolvedValue(value),
 });
 
 interface MockRpc {
-  getSlot: jest.Mock;
-  getBlockHeight: jest.Mock;
-  getLatestBlockhash: jest.Mock;
-  getSlotLeader: jest.Mock;
-  getEpochInfo: jest.Mock;
-  isBlockhashValid: jest.Mock;
-  getBlockTime: jest.Mock;
-  getBlocks: jest.Mock;
-  getBlocksWithLimit: jest.Mock;
-  getBlock: jest.Mock;
+  getSlot: Mock;
+  getBlockHeight: Mock;
+  getLatestBlockhash: Mock;
+  getSlotLeader: Mock;
+  getEpochInfo: Mock;
+  isBlockhashValid: Mock;
+  getBlockTime: Mock;
+  getBlocks: Mock;
+  getBlocksWithLimit: Mock;
+  getBlock: Mock;
 }
 
 describe('SolanaBlockService', () => {
@@ -26,15 +27,15 @@ describe('SolanaBlockService', () => {
   let mockRpc: MockRpc;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Create a fully mocked RPC object
     mockRpc = {
-      getSlot: jest.fn().mockReturnValue(createPendingResponse(BigInt(123456))),
-      getBlockHeight: jest
+      getSlot: vi.fn().mockReturnValue(createPendingResponse(BigInt(123456))),
+      getBlockHeight: vi
         .fn()
         .mockReturnValue(createPendingResponse(BigInt(250000000))),
-      getLatestBlockhash: jest.fn().mockReturnValue(
+      getLatestBlockhash: vi.fn().mockReturnValue(
         createPendingResponse({
           value: {
             blockhash: 'test_blockhash',
@@ -42,12 +43,12 @@ describe('SolanaBlockService', () => {
           },
         }),
       ),
-      getSlotLeader: jest
+      getSlotLeader: vi
         .fn()
         .mockReturnValue(
           createPendingResponse('11111111111111111111111111111111'),
         ),
-      getEpochInfo: jest.fn().mockReturnValue(
+      getEpochInfo: vi.fn().mockReturnValue(
         createPendingResponse({
           epoch: BigInt(500),
           slotIndex: BigInt(1000),
@@ -57,13 +58,13 @@ describe('SolanaBlockService', () => {
           transactionCount: BigInt(1000000),
         }),
       ),
-      isBlockhashValid: jest
+      isBlockhashValid: vi
         .fn()
         .mockReturnValue(createPendingResponse({ value: true })),
-      getBlockTime: jest
+      getBlockTime: vi
         .fn()
         .mockReturnValue(createPendingResponse(BigInt(1700000000))),
-      getBlocks: jest
+      getBlocks: vi
         .fn()
         .mockReturnValue(
           createPendingResponse([
@@ -72,12 +73,12 @@ describe('SolanaBlockService', () => {
             BigInt(100002),
           ]),
         ),
-      getBlocksWithLimit: jest
+      getBlocksWithLimit: vi
         .fn()
         .mockReturnValue(
           createPendingResponse([BigInt(100000), BigInt(100001)]),
         ),
-      getBlock: jest.fn().mockReturnValue(
+      getBlock: vi.fn().mockReturnValue(
         createPendingResponse({
           blockHeight: BigInt(250000000),
           blockhash: 'test_blockhash',
@@ -118,7 +119,7 @@ describe('SolanaBlockService', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('should be defined', () => {
@@ -135,7 +136,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getSlot.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getCurrentSlot()).rejects.toThrow('RPC error');
@@ -154,7 +155,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getBlockHeight.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getBlockHeight()).rejects.toThrow('RPC error');
@@ -184,7 +185,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getLatestBlockhash.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getLatestBlockhash()).rejects.toThrow('RPC error');
@@ -204,7 +205,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getSlotLeader.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getSlotLeader()).rejects.toThrow('RPC error');
@@ -235,7 +236,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getEpochInfo.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getEpochInfo()).rejects.toThrow('RPC error');
@@ -275,7 +276,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.isBlockhashValid.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(
@@ -303,7 +304,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getBlockTime.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getBlockTime(BigInt(123456))).rejects.toThrow(
@@ -333,7 +334,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getBlocks.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getBlocks(BigInt(100000))).rejects.toThrow(
@@ -354,7 +355,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getBlocksWithLimit.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(
@@ -412,7 +413,7 @@ describe('SolanaBlockService', () => {
 
     it('should handle RPC errors', async () => {
       mockRpc.getBlock.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getBlock(BigInt(123456))).rejects.toThrow(

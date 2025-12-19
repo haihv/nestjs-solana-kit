@@ -53,8 +53,10 @@ export interface SolanaModuleOptionsFactory {
     | SolanaModuleOptions;
 }
 
-export interface SolanaModuleAsyncOptions
-  extends Pick<ModuleMetadata, 'imports'> {
+export interface SolanaModuleAsyncOptions extends Pick<
+  ModuleMetadata,
+  'imports'
+> {
   useExisting?: Type<SolanaModuleOptionsFactory>;
   useClass?: Type<SolanaModuleOptionsFactory>;
   useFactory?: (

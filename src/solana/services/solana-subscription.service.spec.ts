@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SolanaConfigService } from './solana-config.service';
 import { SolanaSubscriptionService } from './solana-subscription.service';
@@ -37,9 +38,9 @@ const createMockConfigService = (
 });
 
 const createMockUtilsService = () => ({
-  toAddress: jest.fn((addr: string) => addr as Address),
-  toSignature: jest.fn((sig: string) => sig as Signature),
-  isAbortError: jest.fn((error: unknown) => {
+  toAddress: vi.fn((addr: string) => addr as Address),
+  toSignature: vi.fn((sig: string) => sig as Signature),
+  isAbortError: vi.fn((error: unknown) => {
     const err = error as { name?: string };
     return (
       err?.name === 'AbortError' ||
@@ -54,7 +55,7 @@ describe('SolanaSubscriptionService', () => {
   let mockUtilsService: ReturnType<typeof createMockUtilsService>;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockConfigService = createMockConfigService();
     mockUtilsService = createMockUtilsService();
@@ -79,7 +80,7 @@ describe('SolanaSubscriptionService', () => {
   afterEach(() => {
     // Clean up all active subscriptions to prevent handle leaks
     service.unsubscribeAll();
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('should be defined', () => {
@@ -196,7 +197,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('onAccountChange', () => {
     it('should register account change subscription', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       const subscriptionId = service.onAccountChange(address, callback);
@@ -206,7 +207,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should accept different address formats', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const stringAddress = TEST_ADDRESSES.SYSTEM_PROGRAM;
       const addressTypeAddress = stringAddress as Address;
 
@@ -219,7 +220,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should return incremental subscription IDs', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       const id1 = service.onAccountChange(address, callback);
@@ -233,7 +234,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('onSlotChange', () => {
     it('should register slot change subscription', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const subscriptionId = service.onSlotChange(callback);
 
       expect(subscriptionId).toBeGreaterThan(0);
@@ -241,8 +242,8 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should return unique subscription ID per registration', () => {
-      const callback1 = jest.fn();
-      const callback2 = jest.fn();
+      const callback1 = vi.fn();
+      const callback2 = vi.fn();
 
       const id1 = service.onSlotChange(callback1);
       const id2 = service.onSlotChange(callback2);
@@ -253,7 +254,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('onSignature', () => {
     it('should register signature subscription', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const signature = TEST_SIGNATURES.MAIN as Signature;
 
       const subscriptionId = service.onSignature(signature, callback);
@@ -263,7 +264,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should accept different signature formats', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const stringSig = TEST_SIGNATURES.MAIN;
       const sigTypeAddress = stringSig as Signature;
 
@@ -277,7 +278,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('onProgramAccountChange', () => {
     it('should register program account change subscription', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const programId = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       const subscriptionId = service.onProgramAccountChange(
@@ -290,7 +291,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should accept different program ID formats', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const stringId = TEST_ADDRESSES.SYSTEM_PROGRAM;
       const addressTypeId = stringId as Address;
 
@@ -304,7 +305,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('onLogs', () => {
     it('should register logs subscription', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const accountAddress = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
       const subscriptionId = service.onLogs(accountAddress, callback);
 
@@ -313,7 +314,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should accept different address formats', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const stringAddr = TEST_ADDRESSES.SYSTEM_PROGRAM;
       const addressTypeAddr = stringAddr as Address;
 
@@ -327,7 +328,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('unsubscribe', () => {
     it('should remove subscription by ID', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       const subscriptionId = service.onAccountChange(address, callback);
@@ -343,7 +344,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('unsubscribeAll', () => {
     it('should remove all active subscriptions', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       service.onAccountChange(address, callback);
@@ -356,7 +357,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should be idempotent', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       service.onAccountChange(address, callback);
@@ -371,7 +372,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('onModuleDestroy', () => {
     it('should cleanup subscriptions on module destroy', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       service.onAccountChange(address, callback);
@@ -396,7 +397,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should continue operating even if subscriptions are unavailable', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       // Should not throw even if subscriptions aren't initialized
@@ -405,7 +406,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should handle toAddress conversion errors', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       mockUtilsService.toAddress.mockImplementation(() => {
         throw new Error('Invalid address');
       });
@@ -418,7 +419,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('subscription ID management', () => {
     it('should track subscription IDs across different subscription types', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       const accountId = service.onAccountChange(address, callback);
@@ -430,7 +431,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should handle large number of subscriptions', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
       const ids: number[] = [];
 
@@ -446,7 +447,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should properly track subscriptions in map', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       const id1 = service.onAccountChange(address, callback);
@@ -527,7 +528,7 @@ describe('SolanaSubscriptionService', () => {
 
   describe('unsubscribe and lifecycle management', () => {
     it('should unsubscribe from an active subscription', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       const id = service.onAccountChange(address, callback);
@@ -547,7 +548,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should unsubscribe from all active subscriptions', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       const id1 = service.onAccountChange(address, callback);
@@ -568,7 +569,7 @@ describe('SolanaSubscriptionService', () => {
     });
 
     it('should properly cleanup on module destroy', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
 
       service.onAccountChange(address, callback);

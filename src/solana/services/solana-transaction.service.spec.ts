@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { address, generateKeyPairSigner } from '@solana/kit';
 import type { Instruction } from '@solana/kit';
@@ -20,7 +21,7 @@ const MOCK_SIGNATURE =
   '5kJt5h2B3p6kAMPxQqvYXvyfZ87Z84qxdjQbaVkj2rN6zGyFNR7fsRG3Gzdhvj1io8GZF1dgNpTi27CybBZhECXp';
 
 const createPendingResponse = <T>(value: T) => ({
-  send: jest.fn().mockResolvedValue(value),
+  send: vi.fn().mockResolvedValue(value),
 });
 
 const createMockRpc = (
@@ -28,21 +29,21 @@ const createMockRpc = (
   signatures: GetSignaturesForAddressResult,
   simulation: SimulateTransactionResult,
 ) => ({
-  sendTransaction: jest.fn(() => createPendingResponse(MOCK_SIGNATURE)),
-  getBlockHeight: jest.fn(() => createPendingResponse(BigInt(100))),
-  getSignatureStatuses: jest.fn(() => createPendingResponse(statusResponse)),
-  getSignaturesForAddress: jest.fn(() => createPendingResponse(signatures)),
-  simulateTransaction: jest.fn(() =>
+  sendTransaction: vi.fn(() => createPendingResponse(MOCK_SIGNATURE)),
+  getBlockHeight: vi.fn(() => createPendingResponse(BigInt(100))),
+  getSignatureStatuses: vi.fn(() => createPendingResponse(statusResponse)),
+  getSignaturesForAddress: vi.fn(() => createPendingResponse(signatures)),
+  simulateTransaction: vi.fn(() =>
     createPendingResponse({ value: simulation }),
   ),
-  getTransaction: jest.fn(() => createPendingResponse(null)),
+  getTransaction: vi.fn(() => createPendingResponse(null)),
 });
 
 describe('SolanaTransactionService', () => {
   let service: SolanaTransactionService;
   let utilsService: SolanaUtilsService;
   let mockBlockService: {
-    getLatestBlockhash: jest.Mock<Promise<BlockhashInfo>, []>;
+    getLatestBlockhash: Mock<[], Promise<BlockhashInfo>>;
   };
   let mockRpcService: { rpc: ReturnType<typeof createMockRpc> };
   let mockRpc: ReturnType<typeof createMockRpc>;
@@ -52,7 +53,7 @@ describe('SolanaTransactionService', () => {
   let mockBlockhashInfo: BlockhashInfo;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     expectedStatus = {
       slot: 123,
@@ -96,8 +97,8 @@ describe('SolanaTransactionService', () => {
       },
     };
     mockBlockService = {
-      getLatestBlockhash: jest
-        .fn<Promise<BlockhashInfo>, []>()
+      getLatestBlockhash: vi
+        .fn<[], Promise<BlockhashInfo>>()
         .mockResolvedValue(mockBlockhashInfo),
     };
 
@@ -115,7 +116,7 @@ describe('SolanaTransactionService', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   const createTransferInstruction = (from: Address, to: Address): Instruction =>
@@ -405,7 +406,7 @@ describe('SolanaTransactionService', () => {
           createPendingResponse(BigInt(400)),
         );
 
-        const failureMock = jest.fn(() =>
+        const failureMock = vi.fn(() =>
           Promise.resolve(
             createPendingResponse({
               value: [failedStatus],
@@ -642,7 +643,7 @@ describe('SolanaTransactionService', () => {
       const { signedTx } = await buildSignedTransaction();
 
       mockRpc.sendTransaction.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.sendAndConfirm(signedTx)).rejects.toThrow(
@@ -654,7 +655,7 @@ describe('SolanaTransactionService', () => {
   describe('sendTransaction error handling', () => {
     it('should handle RPC error in sendTransaction', async () => {
       mockRpc.sendTransaction.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       const { signedTx } = await buildSignedTransaction();
@@ -666,7 +667,7 @@ describe('SolanaTransactionService', () => {
 
     it('should handle RPC error in waitForConfirmation', async () => {
       mockRpc.getSignatureStatuses.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       const signature =
@@ -736,7 +737,7 @@ describe('SolanaTransactionService', () => {
       };
 
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(mockTransaction),
+        send: vi.fn().mockResolvedValue(mockTransaction),
       });
 
       const typedResult = (await service.getTransaction(
@@ -752,7 +753,7 @@ describe('SolanaTransactionService', () => {
 
     it('should return null when transaction is not found', async () => {
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(null),
+        send: vi.fn().mockResolvedValue(null),
       });
 
       const typedResult = (await service.getTransaction(
@@ -771,7 +772,7 @@ describe('SolanaTransactionService', () => {
       };
 
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(mockTransaction),
+        send: vi.fn().mockResolvedValue(mockTransaction),
       });
 
       const typedResult = (await service.getTransaction(
@@ -783,7 +784,7 @@ describe('SolanaTransactionService', () => {
 
     it('should handle RPC errors gracefully', async () => {
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('RPC error')),
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
       });
 
       await expect(service.getTransaction(validSignature)).rejects.toThrow(
@@ -826,7 +827,7 @@ describe('SolanaTransactionService', () => {
       };
 
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(complexTransaction),
+        send: vi.fn().mockResolvedValue(complexTransaction),
       });
 
       const typedResult = (await service.getTransaction(
@@ -853,7 +854,7 @@ describe('SolanaTransactionService', () => {
       };
 
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(failedTransaction),
+        send: vi.fn().mockResolvedValue(failedTransaction),
       });
 
       const typedResult = (await service.getTransaction(
@@ -867,7 +868,7 @@ describe('SolanaTransactionService', () => {
 
     it('should pass correct encoding parameter to RPC', async () => {
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(null),
+        send: vi.fn().mockResolvedValue(null),
       });
 
       await service.getTransaction(validSignature);
@@ -893,10 +894,10 @@ describe('SolanaTransactionService', () => {
 
       mockRpc.getTransaction
         .mockReturnValueOnce({
-          send: jest.fn().mockResolvedValue(mockTransaction1),
+          send: vi.fn().mockResolvedValue(mockTransaction1),
         })
         .mockReturnValueOnce({
-          send: jest.fn().mockResolvedValue(mockTransaction2),
+          send: vi.fn().mockResolvedValue(mockTransaction2),
         });
 
       const result1Typed = (await service.getTransaction(
@@ -921,7 +922,7 @@ describe('SolanaTransactionService', () => {
       };
 
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(transactionNoMeta),
+        send: vi.fn().mockResolvedValue(transactionNoMeta),
       });
 
       const typedResult = (await service.getTransaction(
@@ -961,7 +962,7 @@ describe('SolanaTransactionService', () => {
       };
 
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(largeTransaction),
+        send: vi.fn().mockResolvedValue(largeTransaction),
       });
 
       const typedResult = (await service.getTransaction(
@@ -981,7 +982,7 @@ describe('SolanaTransactionService', () => {
 
     it('should handle network timeout errors', async () => {
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockRejectedValue(new Error('Network timeout')),
+        send: vi.fn().mockRejectedValue(new Error('Network timeout')),
       });
 
       await expect(service.getTransaction(validSignature)).rejects.toThrow(
@@ -993,7 +994,7 @@ describe('SolanaTransactionService', () => {
       const signatureStr =
         '4sGjMKvzttesJQgRHDDMyHVHJJ7TqSYVgv3vhbvVWX8vDM98tKfNGzAvzVdq9XhAD4y7FVJSuZXvZ1qx3hJXWMKs';
       mockRpc.getTransaction.mockReturnValue({
-        send: jest.fn().mockResolvedValue(null),
+        send: vi.fn().mockResolvedValue(null),
       });
 
       await service.getTransaction(signatureStr);
