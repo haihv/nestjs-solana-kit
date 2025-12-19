@@ -36,13 +36,13 @@
   },
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "lint": "eslint \"src/**/*.ts\" --fix",
-    "lint:check": "eslint \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" --log-level warn",
+    "lint": "eslint \"src/**/*.ts\" --fix --quiet",
+    "lint:check": "eslint \"src/**/*.ts\" --quiet",
     "type-check": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --reporter=dot 2>/dev/null",
     "test:watch": "vitest",
-    "test:cov": "vitest run --coverage",
+    "test:cov": "vitest run --coverage --reporter=dot 2>/dev/null",
     "prepublishOnly": "npm run type-check && npm run build && npm run test"
   },
   "dependencies": {
