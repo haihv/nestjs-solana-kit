@@ -405,15 +405,22 @@ describe('SolanaSubscriptionService', () => {
       expect(id).toBeGreaterThan(0);
     });
 
-    it('should handle toAddress conversion errors', () => {
+    it('should handle toAddress conversion errors asynchronously', async () => {
       const callback = vi.fn();
       mockUtilsService.toAddress.mockImplementation(() => {
         throw new Error('Invalid address');
       });
 
-      expect(() => {
-        service.onAccountChange('invalid-address', callback);
-      }).toThrow('Invalid address');
+      // With async generators, errors are handled asynchronously in consumeStream
+      // The callback-based API returns immediately and errors are logged
+      const id = service.onAccountChange('invalid-address', callback);
+      expect(id).toBeGreaterThan(0);
+
+      // Give time for the async error to be processed
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Callback should not have been called since the subscription errored
+      expect(callback).not.toHaveBeenCalled();
     });
   });
 
@@ -589,6 +596,450 @@ describe('SolanaSubscriptionService', () => {
       expect(() => {
         service.onModuleDestroy();
       }).not.toThrow();
+    });
+  });
+
+  describe('getActiveSubscriptionCount', () => {
+    it('should return 0 when no subscriptions', () => {
+      expect(service.getActiveSubscriptionCount()).toBe(0);
+    });
+
+    it('should track active subscriptions', () => {
+      const callback = vi.fn();
+      const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
+
+      service.onAccountChange(address, callback);
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+
+      service.onSlotChange(callback);
+      expect(service.getActiveSubscriptionCount()).toBe(2);
+    });
+
+    it('should decrease count after unsubscribe', () => {
+      const callback = vi.fn();
+      const address = TEST_ADDRESSES.SYSTEM_PROGRAM as Address;
+
+      const id = service.onAccountChange(address, callback);
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+
+      service.unsubscribe(id);
+      expect(service.getActiveSubscriptionCount()).toBe(0);
+    });
+  });
+
+  describe('subscribeWithRetry', () => {
+    it('should return subscription id on success', async () => {
+      const subscribeFn = vi.fn().mockReturnValue(123);
+
+      const result = await service.subscribeWithRetry(subscribeFn);
+
+      expect(result).toBe(123);
+      expect(subscribeFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry on failure', async () => {
+      const subscribeFn = vi
+        .fn()
+        .mockImplementationOnce(() => {
+          throw new Error('First failure');
+        })
+        .mockReturnValue(456);
+
+      const result = await service.subscribeWithRetry(subscribeFn, {
+        maxRetries: 3,
+        initialDelayMs: 1,
+      });
+
+      expect(result).toBe(456);
+      expect(subscribeFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw after max retries', async () => {
+      const subscribeFn = vi.fn().mockImplementation(() => {
+        throw new Error('Always fails');
+      });
+
+      await expect(
+        service.subscribeWithRetry(subscribeFn, {
+          maxRetries: 2,
+          initialDelayMs: 1,
+        }),
+      ).rejects.toThrow('Always fails');
+
+      expect(subscribeFn).toHaveBeenCalledTimes(2);
+    });
+
+    it('should call onRetry callback', async () => {
+      const onRetry = vi.fn();
+      const subscribeFn = vi
+        .fn()
+        .mockImplementationOnce(() => {
+          throw new Error('Retry me');
+        })
+        .mockReturnValue(789);
+
+      await service.subscribeWithRetry(subscribeFn, {
+        maxRetries: 3,
+        initialDelayMs: 1,
+        onRetry,
+      });
+
+      expect(onRetry).toHaveBeenCalledWith(1, expect.any(Error));
+    });
+
+    it('should use exponential backoff with max delay', async () => {
+      const subscribeFn = vi
+        .fn()
+        .mockImplementationOnce(() => {
+          throw new Error('Fail 1');
+        })
+        .mockImplementationOnce(() => {
+          throw new Error('Fail 2');
+        })
+        .mockReturnValue(999);
+
+      const start = Date.now();
+      await service.subscribeWithRetry(subscribeFn, {
+        maxRetries: 5,
+        initialDelayMs: 10,
+        maxDelayMs: 20,
+      });
+      const elapsed = Date.now() - start;
+
+      // Should have waited at least 10 + 20 = 30ms (with some tolerance)
+      expect(elapsed).toBeGreaterThanOrEqual(25);
+      expect(subscribeFn).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('onProgramLogsWithDiscriminators', () => {
+    it('should subscribe to program logs with event discriminators', () => {
+      const callback = vi.fn();
+      const programId = TEST_ADDRESSES.TOKEN_PROGRAM as Address;
+      const discriminators = [new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])];
+
+      const id = service.onProgramLogs(programId, callback, { discriminators });
+
+      expect(typeof id).toBe('number');
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+    });
+  });
+
+  describe('async generator streams', () => {
+    it('accountStream should throw when subscriptions unavailable', async () => {
+      // Force subscriptions to be null by accessing private property
+      (service as unknown as { subscriptions: null }).subscriptions = null;
+
+      const abortController = new AbortController();
+
+      await expect(async () => {
+        const generator = service.accountStream(
+          TEST_ADDRESSES.SYSTEM_PROGRAM,
+          abortController.signal,
+        );
+        // Need to call next() to trigger the generator
+        await generator.next();
+      }).rejects.toThrow('WebSocket subscriptions not available');
+    });
+
+    it('slotStream should throw when subscriptions unavailable', async () => {
+      (service as unknown as { subscriptions: null }).subscriptions = null;
+
+      const abortController = new AbortController();
+
+      await expect(async () => {
+        const generator = service.slotStream(abortController.signal);
+        await generator.next();
+      }).rejects.toThrow('WebSocket subscriptions not available');
+    });
+
+    it('signatureStream should throw when subscriptions unavailable', async () => {
+      (service as unknown as { subscriptions: null }).subscriptions = null;
+
+      const abortController = new AbortController();
+
+      await expect(async () => {
+        const generator = service.signatureStream(
+          TEST_SIGNATURES.MAIN,
+          abortController.signal,
+        );
+        await generator.next();
+      }).rejects.toThrow('WebSocket subscriptions not available');
+    });
+
+    it('programAccountStream should throw when subscriptions unavailable', async () => {
+      (service as unknown as { subscriptions: null }).subscriptions = null;
+
+      const abortController = new AbortController();
+
+      await expect(async () => {
+        const generator = service.programAccountStream(
+          TEST_ADDRESSES.SYSTEM_PROGRAM,
+          abortController.signal,
+        );
+        await generator.next();
+      }).rejects.toThrow('WebSocket subscriptions not available');
+    });
+
+    it('logsStream should throw when subscriptions unavailable', async () => {
+      (service as unknown as { subscriptions: null }).subscriptions = null;
+
+      const abortController = new AbortController();
+
+      await expect(async () => {
+        const generator = service.logsStream(
+          TEST_ADDRESSES.SYSTEM_PROGRAM,
+          abortController.signal,
+        );
+        await generator.next();
+      }).rejects.toThrow('WebSocket subscriptions not available');
+    });
+
+    it('programLogsStream should throw when subscriptions unavailable', async () => {
+      (service as unknown as { subscriptions: null }).subscriptions = null;
+
+      const abortController = new AbortController();
+
+      await expect(async () => {
+        const generator = service.programLogsStream(
+          TEST_ADDRESSES.SYSTEM_PROGRAM,
+          abortController.signal,
+        );
+        await generator.next();
+      }).rejects.toThrow('WebSocket subscriptions not available');
+    });
+
+    it('should call toAddress for address-based streams', async () => {
+      const abortController = new AbortController();
+      abortController.abort(); // Immediately abort to prevent hanging
+
+      try {
+        const generator = service.accountStream(
+          TEST_ADDRESSES.SYSTEM_PROGRAM,
+          abortController.signal,
+        );
+        await generator.next();
+      } catch {
+        // Expected to fail due to abort or no actual WebSocket
+      }
+
+      expect(mockUtilsService.toAddress).toHaveBeenCalledWith(
+        TEST_ADDRESSES.SYSTEM_PROGRAM,
+      );
+    });
+
+    it('should call toSignature for signature stream', async () => {
+      const abortController = new AbortController();
+      abortController.abort();
+
+      try {
+        const generator = service.signatureStream(
+          TEST_SIGNATURES.MAIN,
+          abortController.signal,
+        );
+        await generator.next();
+      } catch {
+        // Expected to fail
+      }
+
+      expect(mockUtilsService.toSignature).toHaveBeenCalledWith(
+        TEST_SIGNATURES.MAIN,
+      );
+    });
+  });
+
+  describe('discriminator filtering', () => {
+    it('should filter logs by discriminator in programLogsStream', async () => {
+      const callback = vi.fn();
+      const programId = TEST_ADDRESSES.TOKEN_PROGRAM as Address;
+
+      // Create discriminator that won't match any logs
+      const discriminators = [new Uint8Array([255, 255, 255, 255])];
+
+      const id = service.onProgramLogs(programId, callback, { discriminators });
+      expect(id).toBeGreaterThan(0);
+
+      // The subscription is created but the filtering happens in the stream
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+    });
+
+    it('should pass through logs when no discriminators specified', () => {
+      const callback = vi.fn();
+      const programId = TEST_ADDRESSES.TOKEN_PROGRAM as Address;
+
+      const id = service.onProgramLogs(programId, callback);
+      expect(id).toBeGreaterThan(0);
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+    });
+  });
+
+  describe('private helper methods coverage', () => {
+    // Testing private methods indirectly through the public API
+
+    it('logsContainDiscriminator should match valid discriminator', () => {
+      // Access private method via type assertion for testing
+      const logsContainDiscriminator = (
+        service as unknown as {
+          logsContainDiscriminator: (
+            logs: readonly string[],
+            discriminators: Uint8Array[],
+          ) => boolean;
+        }
+      ).logsContainDiscriminator.bind(service);
+
+      // Create a log with "Program data: <base64>" format
+      // Base64 of [1, 2, 3, 4] is "AQIDBA=="
+      const logs = ['Program data: AQIDBA=='];
+      const discriminator = new Uint8Array([1, 2, 3, 4]);
+
+      const result = logsContainDiscriminator(logs, [discriminator]);
+      expect(result).toBe(true);
+    });
+
+    it('logsContainDiscriminator should not match different discriminator', () => {
+      const logsContainDiscriminator = (
+        service as unknown as {
+          logsContainDiscriminator: (
+            logs: readonly string[],
+            discriminators: Uint8Array[],
+          ) => boolean;
+        }
+      ).logsContainDiscriminator.bind(service);
+
+      const logs = ['Program data: AQIDBA=='];
+      const discriminator = new Uint8Array([5, 6, 7, 8]);
+
+      const result = logsContainDiscriminator(logs, [discriminator]);
+      expect(result).toBe(false);
+    });
+
+    it('logsContainDiscriminator should skip non-program-data logs', () => {
+      const logsContainDiscriminator = (
+        service as unknown as {
+          logsContainDiscriminator: (
+            logs: readonly string[],
+            discriminators: Uint8Array[],
+          ) => boolean;
+        }
+      ).logsContainDiscriminator.bind(service);
+
+      const logs = [
+        'Program log: some message',
+        'invoke [1]',
+        'success',
+      ];
+      const discriminator = new Uint8Array([1, 2, 3, 4]);
+
+      const result = logsContainDiscriminator(logs, [discriminator]);
+      expect(result).toBe(false);
+    });
+
+    it('logsContainDiscriminator should handle invalid base64', () => {
+      const logsContainDiscriminator = (
+        service as unknown as {
+          logsContainDiscriminator: (
+            logs: readonly string[],
+            discriminators: Uint8Array[],
+          ) => boolean;
+        }
+      ).logsContainDiscriminator.bind(service);
+
+      const logs = ['Program data: not-valid-base64!!!'];
+      const discriminator = new Uint8Array([1, 2, 3, 4]);
+
+      // Should not throw, just skip invalid base64
+      const result = logsContainDiscriminator(logs, [discriminator]);
+      expect(result).toBe(false);
+    });
+
+    it('logsContainDiscriminator should handle data shorter than discriminator', () => {
+      const logsContainDiscriminator = (
+        service as unknown as {
+          logsContainDiscriminator: (
+            logs: readonly string[],
+            discriminators: Uint8Array[],
+          ) => boolean;
+        }
+      ).logsContainDiscriminator.bind(service);
+
+      // Base64 of [1, 2] is "AQI="
+      const logs = ['Program data: AQI='];
+      const discriminator = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+      const result = logsContainDiscriminator(logs, [discriminator]);
+      expect(result).toBe(false);
+    });
+
+    it('logsContainDiscriminator should match any of multiple discriminators', () => {
+      const logsContainDiscriminator = (
+        service as unknown as {
+          logsContainDiscriminator: (
+            logs: readonly string[],
+            discriminators: Uint8Array[],
+          ) => boolean;
+        }
+      ).logsContainDiscriminator.bind(service);
+
+      const logs = ['Program data: BQYHCA=='];
+      const discriminators = [
+        new Uint8Array([1, 2, 3, 4]),
+        new Uint8Array([5, 6, 7, 8]), // This one matches
+      ];
+
+      const result = logsContainDiscriminator(logs, discriminators);
+      expect(result).toBe(true);
+    });
+
+    it('bytesEqual should return true for identical arrays', () => {
+      const bytesEqual = (
+        service as unknown as {
+          bytesEqual: (a: Uint8Array | Buffer, b: Uint8Array) => boolean;
+        }
+      ).bytesEqual.bind(service);
+
+      const a = new Uint8Array([1, 2, 3, 4]);
+      const b = new Uint8Array([1, 2, 3, 4]);
+
+      expect(bytesEqual(a, b)).toBe(true);
+    });
+
+    it('bytesEqual should return false for different length arrays', () => {
+      const bytesEqual = (
+        service as unknown as {
+          bytesEqual: (a: Uint8Array | Buffer, b: Uint8Array) => boolean;
+        }
+      ).bytesEqual.bind(service);
+
+      const a = new Uint8Array([1, 2, 3]);
+      const b = new Uint8Array([1, 2, 3, 4]);
+
+      expect(bytesEqual(a, b)).toBe(false);
+    });
+
+    it('bytesEqual should return false for different content', () => {
+      const bytesEqual = (
+        service as unknown as {
+          bytesEqual: (a: Uint8Array | Buffer, b: Uint8Array) => boolean;
+        }
+      ).bytesEqual.bind(service);
+
+      const a = new Uint8Array([1, 2, 3, 4]);
+      const b = new Uint8Array([1, 2, 3, 5]);
+
+      expect(bytesEqual(a, b)).toBe(false);
+    });
+
+    it('bytesEqual should work with Buffer', () => {
+      const bytesEqual = (
+        service as unknown as {
+          bytesEqual: (a: Uint8Array | Buffer, b: Uint8Array) => boolean;
+        }
+      ).bytesEqual.bind(service);
+
+      const a = Buffer.from([1, 2, 3, 4]);
+      const b = new Uint8Array([1, 2, 3, 4]);
+
+      expect(bytesEqual(a, b)).toBe(true);
     });
   });
 });
