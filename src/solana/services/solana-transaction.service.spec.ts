@@ -1,7 +1,7 @@
 import { vi, type Mock } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { address, generateKeyPairSigner } from '@solana/kit';
-import type { Instruction } from '@solana/kit';
+import type { Instruction, AddressesByLookupTableAddress } from '@solana/kit';
 import { SystemProgram } from '@solana/web3.js';
 
 import { SolanaBlockService } from './solana-block.service';
@@ -16,13 +16,9 @@ import type {
   SimulateTransactionResult,
   TransactionStatus,
 } from '../types';
+import { createPendingResponse, TEST_SIGNATURES } from '../__tests__/test-fixtures';
 
-const MOCK_SIGNATURE =
-  '5kJt5h2B3p6kAMPxQqvYXvyfZ87Z84qxdjQbaVkj2rN6zGyFNR7fsRG3Gzdhvj1io8GZF1dgNpTi27CybBZhECXp';
-
-const createPendingResponse = <T>(value: T) => ({
-  send: vi.fn().mockResolvedValue(value),
-});
+const MOCK_SIGNATURE = TEST_SIGNATURES.SECONDARY;
 
 const createMockRpc = (
   statusResponse: { value: (TransactionStatus | null)[] },
@@ -239,11 +235,13 @@ describe('SolanaTransactionService', () => {
 
   it('fetches signatures for an address via RPC', async () => {
     const voteAccount = address('Vote111111111111111111111111111111111111111');
-    const signatures = await service.getSignaturesForAddress(voteAccount, 5);
+    const signatures = await service.getSignaturesForAddress(voteAccount, { limit: 5 });
 
     expect(signatures).toEqual(mockSignatures);
     expect(mockRpc.getSignaturesForAddress).toHaveBeenCalledWith(voteAccount, {
       limit: 5,
+      before: undefined,
+      until: undefined,
     });
   });
 
@@ -1009,4 +1007,333 @@ describe('SolanaTransactionService', () => {
       );
     });
   });
+
+  describe('decodeTransaction', () => {
+    it('should throw on invalid base64', () => {
+      expect(() => service.decodeTransaction('not-valid-base64!!!')).toThrow();
+    });
+
+    it('should throw on malformed transaction data', () => {
+      // Valid base64 but not a valid transaction
+      const invalidTx = Buffer.from('not a valid transaction').toString('base64');
+      expect(() => service.decodeTransaction(invalidTx)).toThrow();
+    });
+  });
+
+  describe('encodeTransaction', () => {
+    it('should encode a transaction to base64', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      const signedTx = await service.signTransactionMessage(message, [signer]);
+      const encoded = service.encodeTransaction(signedTx);
+
+      expect(typeof encoded).toBe('string');
+      expect(encoded.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('buildUnsignedBase64', () => {
+    it('should build unsigned transaction as base64', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const base64 = await service.buildUnsignedBase64({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      expect(typeof base64).toBe('string');
+      expect(base64.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('estimatePriorityFee', () => {
+    it('should throw when RPC fails', async () => {
+      mockRpc.getRecentPrioritizationFees = vi.fn().mockReturnValue({
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
+      });
+
+      await expect(service.estimatePriorityFee()).rejects.toThrow('RPC error');
+    });
+
+    it('should return median priority fee', async () => {
+      mockRpc.getRecentPrioritizationFees = vi.fn().mockReturnValue({
+        send: vi.fn().mockResolvedValue([
+          { slot: 1n, prioritizationFee: 100n },
+          { slot: 2n, prioritizationFee: 200n },
+          { slot: 3n, prioritizationFee: 300n },
+        ]),
+      });
+
+      const fee = await service.estimatePriorityFee();
+
+      expect(fee).toBe(200n);
+    });
+
+    it('should return 0 when no fees available', async () => {
+      mockRpc.getRecentPrioritizationFees = vi.fn().mockReturnValue({
+        send: vi.fn().mockResolvedValue([]),
+      });
+
+      const fee = await service.estimatePriorityFee();
+
+      expect(fee).toBe(0n);
+    });
+  });
+
+  describe('getSignature', () => {
+    it('should extract signature from signed transaction', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      const signedTx = await service.signTransactionMessage(message, [signer]);
+      const signature = service.getSignature(signedTx);
+
+      expect(typeof signature).toBe('string');
+      expect(signature.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('decompileTransaction', () => {
+    it('should decompile a signed transaction', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      const signedTx = await service.signTransactionMessage(message, [signer]);
+      const decompiled = service.decompileTransaction(signedTx);
+
+      expect(decompiled).toBeDefined();
+      expect(decompiled.instructions).toBeDefined();
+    });
+
+    it('should decompile with addressesByLookupTable', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      const signedTx = await service.signTransactionMessage(message, [signer]);
+
+      // Pass empty lookup table addresses - won't affect simple tx but covers the branch
+      const altAddresses = {} as AddressesByLookupTableAddress;
+      const decompiled = service.decompileTransaction(signedTx, altAddresses);
+
+      expect(decompiled).toBeDefined();
+      expect(decompiled.instructions).toBeDefined();
+    });
+  });
+
+  describe('partiallySign', () => {
+    it('should partially sign a transaction message', async () => {
+      const signer1 = await generateKeyPairSigner();
+      const signer2 = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [
+          { address: signer1.address, role: 3 }, // WritableSigner
+          { address: signer2.address, role: 3 }, // WritableSigner
+        ],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer1.address,
+        instructions: [ix],
+      });
+
+      // Partially sign with only signer1
+      const partialResult = await service.partiallySign(message, [signer1]);
+
+      expect(partialResult.signedBy).toContain(signer1.address);
+      expect(partialResult.transaction).toBeDefined();
+    });
+  });
+
+  describe('isFullySigned', () => {
+    it('should return true for fully signed transaction', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      const partialResult = await service.partiallySign(message, [signer]);
+      const isFully = service.isFullySigned(partialResult);
+
+      expect(isFully).toBe(true);
+    });
+  });
+
+  describe('instruction utility methods', () => {
+    it('isInstructionForProgram should return true for matching program', () => {
+      const programId = address('11111111111111111111111111111111');
+      const ix: Instruction = {
+        programAddress: programId,
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      expect(service.isInstructionForProgram(ix, programId)).toBe(true);
+    });
+
+    it('isInstructionForProgram should return false for non-matching program', () => {
+      const programId = address('11111111111111111111111111111111');
+      const otherProgram = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+      const ix: Instruction = {
+        programAddress: programId,
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      expect(service.isInstructionForProgram(ix, otherProgram)).toBe(false);
+    });
+
+    it('getInstructionAccounts should return account addresses', () => {
+      const account1 = address('11111111111111111111111111111111');
+      const account2 = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [
+          { address: account1, role: 0 },
+          { address: account2, role: 1 },
+        ],
+        data: new Uint8Array([0]),
+      };
+
+      const accounts = service.getInstructionAccounts(ix);
+
+      expect(accounts).toHaveLength(2);
+      expect(accounts[0]).toBe(account1);
+      expect(accounts[1]).toBe(account2);
+    });
+
+    it('getInstructionData should return instruction data', () => {
+      const testData = new Uint8Array([1, 2, 3, 4, 5]);
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: testData,
+      };
+
+      const data = service.getInstructionData(ix);
+
+      expect(data).toEqual(testData);
+    });
+  });
+
+  describe('simulateTransaction', () => {
+    it('should simulate a signed transaction', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      const signedTx = await service.signTransactionMessage(message, [signer]);
+
+      // Mock already returns simulation result
+      const result = await service.simulateTransaction(signedTx);
+
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('getSignatureStatuses', () => {
+    it('should get status for multiple signatures', async () => {
+      const signatures = [MOCK_SIGNATURE, MOCK_SIGNATURE];
+      const result = await service.getSignatureStatuses(signatures);
+
+      expect(result).toBeDefined();
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  describe('getTransactionStatus', () => {
+    it('should get status for a single signature', async () => {
+      const result = await service.getTransactionStatus(MOCK_SIGNATURE);
+
+      expect(result).toBeDefined();
+    });
+
+    it('should return null for unknown signature', async () => {
+      mockRpc.getSignatureStatuses = vi.fn().mockReturnValue({
+        send: vi.fn().mockResolvedValue({ value: [null] }),
+      });
+
+      const result = await service.getTransactionStatus(MOCK_SIGNATURE);
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getSignaturesForAddress', () => {
+    it('should get signatures for an address', async () => {
+      const testAddress = address('11111111111111111111111111111111');
+      const result = await service.getSignaturesForAddress(testAddress);
+
+      expect(result).toBeDefined();
+      expect(Array.isArray(result)).toBe(true);
+    });
+
+    it('should accept limit option', async () => {
+      const testAddress = address('11111111111111111111111111111111');
+      const result = await service.getSignaturesForAddress(testAddress, {
+        limit: 10,
+      });
+
+      expect(result).toBeDefined();
+    });
+  });
+
 });
