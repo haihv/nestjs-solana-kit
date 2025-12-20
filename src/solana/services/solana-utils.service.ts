@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { address, createKeyPairSignerFromBytes, signature } from '@solana/kit';
+import {
+  address,
+  createKeyPairSignerFromBytes,
+  createNoopSigner,
+  signature,
+} from '@solana/kit';
 import type {
   Address,
   Instruction,
@@ -233,6 +238,38 @@ export class SolanaUtilsService {
       this.logger.error('Failed to create Signer from secret key', error);
       throw error;
     }
+  }
+
+  /**
+   * Create a no-op signer for building unsigned transactions
+   *
+   * A no-op signer is a placeholder signer that doesn't actually sign.
+   * Use this when building transactions that will be signed client-side
+   * (e.g., by a wallet adapter in the browser).
+   *
+   * The no-op signer provides the address for fee payer and account
+   * lookups but delegates actual signing to the client.
+   *
+   * @param addr Address string or Address type
+   * @returns TransactionSigner that can be used as fee payer
+   *
+   * @example
+   * ```typescript
+   * // Build unsigned transaction for client signing
+   * const userSigner = utilsService.toNoopSigner(userWalletAddress);
+   *
+   * const { encodedTransaction } = await transactionService.buildUnsignedBase64({
+   *   feePayer: userSigner,
+   *   instructions: [transferIx],
+   * });
+   *
+   * // Send to client for signing
+   * return { transaction: encodedTransaction };
+   * ```
+   */
+  toNoopSigner(addr: string | Address): TransactionSigner {
+    const addrTyped = this.toAddress(addr);
+    return createNoopSigner(addrTyped);
   }
 
   // ============================================================================
@@ -526,5 +563,107 @@ export class SolanaUtilsService {
       this.logger.error('Failed to convert SOL to lamports', error);
       throw error;
     }
+  }
+
+  // ============================================================================
+  // Token Amount Conversion
+  // ============================================================================
+
+  /**
+   * Convert raw token amount to display amount with decimals
+   *
+   * @param rawAmount Raw token amount (bigint)
+   * @param decimals Token decimals
+   * @returns Display amount as number
+   *
+   * @example
+   * ```typescript
+   * // USDC has 6 decimals
+   * const displayAmount = utilsService.toDisplayAmount(1000000n, 6); // 1.0
+   *
+   * // Token with 9 decimals
+   * const displayAmount = utilsService.toDisplayAmount(1500000000n, 9); // 1.5
+   * ```
+   */
+  toDisplayAmount(rawAmount: bigint, decimals: number): number {
+    const divisor = 10 ** decimals;
+    return Number(rawAmount) / divisor;
+  }
+
+  /**
+   * Convert display amount to raw token amount
+   *
+   * @param displayAmount Display amount as number
+   * @param decimals Token decimals
+   * @returns Raw token amount as bigint
+   *
+   * @example
+   * ```typescript
+   * // USDC has 6 decimals
+   * const rawAmount = utilsService.toRawAmount(1.5, 6); // 1500000n
+   *
+   * // Token with 9 decimals
+   * const rawAmount = utilsService.toRawAmount(1.0, 9); // 1000000000n
+   * ```
+   */
+  toRawAmount(displayAmount: number, decimals: number): bigint {
+    const multiplier = 10 ** decimals;
+    return BigInt(Math.floor(displayAmount * multiplier));
+  }
+
+  /**
+   * Convert multiple raw amounts to display amounts
+   *
+   * Converts all bigint properties in an object to display amounts.
+   *
+   * @param values Object with bigint values to convert
+   * @param decimals Token decimals
+   * @returns Object with number values
+   *
+   * @example
+   * ```typescript
+   * const raw = { balance: 1500000000n, staked: 500000000n };
+   * const display = utilsService.toDisplayAmounts(raw, 9);
+   * // { balance: 1.5, staked: 0.5 }
+   * ```
+   */
+  toDisplayAmounts<T extends Record<string, bigint>>(
+    values: T,
+    decimals: number,
+  ): { [K in keyof T]: number } {
+    const result = {} as { [K in keyof T]: number };
+    for (const key of Object.keys(values) as (keyof T)[]) {
+      result[key] = this.toDisplayAmount(values[key], decimals);
+    }
+    return result;
+  }
+
+  /**
+   * Format token amount with symbol
+   *
+   * @param amount Raw or display amount
+   * @param decimals Token decimals (only needed if amount is bigint)
+   * @param symbol Token symbol
+   * @param precision Display precision (default: 2)
+   * @returns Formatted string like "1.50 USDC"
+   *
+   * @example
+   * ```typescript
+   * utilsService.formatTokenAmount(1500000n, 6, 'USDC'); // "1.50 USDC"
+   * utilsService.formatTokenAmount(1.5, 0, 'SOL', 4); // "1.5000 SOL"
+   * ```
+   */
+  formatTokenAmount(
+    amount: bigint | number,
+    decimals: number,
+    symbol: string,
+    precision = 2,
+  ): string {
+    const displayAmount =
+      typeof amount === 'bigint'
+        ? this.toDisplayAmount(amount, decimals)
+        : amount;
+
+    return `${displayAmount.toFixed(precision)} ${symbol}`;
   }
 }

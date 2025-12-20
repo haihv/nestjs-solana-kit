@@ -1445,4 +1445,62 @@ describe('SolanaUtilsService', () => {
       expect(pub2).toBe(pub3);
     });
   });
+
+  describe('toDisplayAmounts', () => {
+    it('should convert multiple bigint values to display amounts', () => {
+      const values = {
+        balance: 1500000000n,
+        staked: 500000000n,
+        rewards: 100000000n,
+      };
+
+      const result = service.toDisplayAmounts(values, 9);
+
+      expect(result.balance).toBeCloseTo(1.5);
+      expect(result.staked).toBeCloseTo(0.5);
+      expect(result.rewards).toBeCloseTo(0.1);
+    });
+
+    it('should handle zero values', () => {
+      const values = { balance: 0n, empty: 0n };
+      const result = service.toDisplayAmounts(values, 6);
+
+      expect(result.balance).toBe(0);
+      expect(result.empty).toBe(0);
+    });
+
+    it('should handle different decimals', () => {
+      const values = { amount: 1000000n };
+
+      expect(service.toDisplayAmounts(values, 6).amount).toBeCloseTo(1);
+      expect(service.toDisplayAmounts(values, 9).amount).toBeCloseTo(0.001);
+    });
+  });
+
+  describe('formatTokenAmount', () => {
+    it('should format bigint amount with symbol', () => {
+      const result = service.formatTokenAmount(1500000n, 6, 'USDC');
+      expect(result).toBe('1.50 USDC');
+    });
+
+    it('should format number amount with symbol', () => {
+      const result = service.formatTokenAmount(1.5, 0, 'SOL');
+      expect(result).toBe('1.50 SOL');
+    });
+
+    it('should respect custom precision', () => {
+      const result = service.formatTokenAmount(1.5, 0, 'SOL', 4);
+      expect(result).toBe('1.5000 SOL');
+    });
+
+    it('should handle zero amount', () => {
+      const result = service.formatTokenAmount(0n, 9, 'SOL');
+      expect(result).toBe('0.00 SOL');
+    });
+
+    it('should handle large amounts', () => {
+      const result = service.formatTokenAmount(1000000000000n, 6, 'USDC', 0);
+      expect(result).toBe('1000000 USDC');
+    });
+  });
 });
