@@ -1,7 +1,7 @@
 /**
  * Solana RPC Types
  *
- * This file contains all RPC-related type definitions derived from @solana/kit v4.x using TypeScript
+ * This file contains all RPC-related type definitions derived from @solana/kit v5.x using TypeScript
  * utility types (ReturnType, Awaited, Omit, etc.) to ensure type safety and compatibility with
  * the official @solana/kit SDK.
  *
