@@ -8,6 +8,7 @@ import { SOLANA_MODULE_OPTIONS } from './constants/solana.constants';
 import {
   SolanaAccountService,
   SolanaAddressService,
+  SolanaAltService,
   SolanaAuthorityService,
   SolanaBlockService,
   SolanaConfigService,
@@ -45,6 +46,7 @@ export class SolanaModule {
         },
         SolanaAccountService,
         SolanaAddressService,
+        SolanaAltService,
         SolanaAuthorityService,
         SolanaBlockService,
         SolanaConfigService,
@@ -58,6 +60,7 @@ export class SolanaModule {
       exports: [
         SolanaAccountService,
         SolanaAddressService,
+        SolanaAltService,
         SolanaAuthorityService,
         SolanaBlockService,
         SolanaConfigService,
@@ -97,6 +100,7 @@ export class SolanaModule {
         ...this.createAsyncProviders(options),
         SolanaAccountService,
         SolanaAddressService,
+        SolanaAltService,
         SolanaAuthorityService,
         SolanaBlockService,
         SolanaConfigService,
@@ -110,6 +114,7 @@ export class SolanaModule {
       exports: [
         SolanaAccountService,
         SolanaAddressService,
+        SolanaAltService,
         SolanaAuthorityService,
         SolanaBlockService,
         SolanaConfigService,
