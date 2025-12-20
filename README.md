@@ -166,25 +166,25 @@ git push origin v0.2.0
 
 ```bash
 # Install dependencies
-pnpm install
+npm install
 
 # Run tests
-pnpm test
+npm test
 
 # Run tests in watch mode
-pnpm test:watch
+npm run test:watch
 
 # Generate test coverage
-pnpm test:cov
+npm run test:cov
 
 # Lint code
-pnpm lint
+npm run lint
 
 # Format code
-pnpm format
+npm run format
 
 # Build package
-pnpm build
+npm run build
 ```
 
 ## License

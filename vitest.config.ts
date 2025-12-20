@@ -4,21 +4,13 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
-    root: './src',
-    include: ['**/*.spec.ts'],
     environment: 'node',
+    include: ['src/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
-      reportsDirectory: '../coverage',
-      reporter: ['text', 'lcov', 'json-summary'],
-      include: ['**/*.ts'],
-      exclude: [
-        '**/node_modules/**',
-        '**/*.spec.ts',
-        '**/*.test.ts',
-        '**/index.ts',
-        '**/*.d.ts',
-      ],
+      reporter: ['text', 'json', 'json-summary'],
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.spec.ts', 'src/**/index.ts'],
     },
   },
   plugins: [swc.vite()],
