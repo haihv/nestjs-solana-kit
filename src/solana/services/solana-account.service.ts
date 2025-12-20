@@ -180,4 +180,202 @@ export class SolanaAccountService {
       throw error;
     }
   }
+
+  /**
+   * Get the decimals of an SPL token mint
+   *
+   * Fetches the mint account and extracts the decimals field.
+   *
+   * @param mintAddress The token mint address
+   * @returns The number of decimals (0-9)
+   * @throws Error if mint account doesn't exist or is invalid
+   *
+   * @example
+   * ```typescript
+   * const decimals = await accountService.getTokenDecimals(usdcMint);
+   * // decimals = 6
+   *
+   * const rawAmount = BigInt(amount * 10 ** decimals);
+   * ```
+   */
+  async getTokenDecimals(mintAddress: string | Address): Promise<number> {
+    try {
+      const mint = this.utilsService.toAddress(mintAddress);
+      const accountInfo = await this.getAccountInfo(mint);
+
+      if (!accountInfo) {
+        throw new Error(`Mint account not found: ${mint}`);
+      }
+
+      const [base64Data] = accountInfo.data;
+      const data = Buffer.from(base64Data, 'base64');
+
+      // SPL Token mint layout: decimals is at offset 44
+      // mint_authority (36) + supply (8) = 44
+      const DECIMALS_OFFSET = 44;
+
+      if (data.length < DECIMALS_OFFSET + 1) {
+        throw new Error(`Invalid mint account data: ${mint}`);
+      }
+
+      const decimals = data[DECIMALS_OFFSET];
+      this.logger.debug(`Token ${mint} has ${decimals} decimals`);
+      return decimals;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get token decimals for ${mintAddress}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // Batch Operations
+  // ============================================================================
+
+  /**
+   * Get multiple accounts with typed decoding
+   *
+   * Fetches accounts and decodes them using a provided decoder function.
+   *
+   * @param addresses Array of account addresses
+   * @param decoder Function to decode account data
+   * @returns Array of decoded accounts (null for missing accounts)
+   *
+   * @example
+   * ```typescript
+   * type TokenAccount = { mint: Address; owner: Address; amount: bigint };
+   *
+   * const accounts = await accountService.getMultipleAccountsTyped(
+   *   tokenAccountAddresses,
+   *   (data) => decodeTokenAccount(data)
+   * );
+   * ```
+   */
+  async getMultipleAccountsTyped<T>(
+    addresses: (string | Address)[],
+    decoder: (data: Uint8Array) => T,
+  ): Promise<(T | null)[]> {
+    const accounts = await this.getMultipleAccounts(addresses);
+
+    return accounts.map((account) => {
+      if (!account) {
+        return null;
+      }
+
+      try {
+        // Account data is base64 encoded
+        const [base64Data] = account.data;
+        const buffer = Buffer.from(base64Data, 'base64');
+        return decoder(new Uint8Array(buffer));
+      } catch (error) {
+        this.logger.warn('Failed to decode account data', error);
+        return null;
+      }
+    });
+  }
+
+  /**
+   * Batch get accounts with rate limiting
+   *
+   * Fetches accounts in batches to avoid hitting RPC rate limits.
+   * Useful for fetching large numbers of accounts.
+   *
+   * @param addresses Array of account addresses
+   * @param options Batch options
+   * @returns Array of account info (null for missing accounts)
+   *
+   * @example
+   * ```typescript
+   * // Fetch 1000 accounts in batches of 100
+   * const accounts = await accountService.batchGetAccounts(
+   *   addresses,
+   *   { batchSize: 100, delayMs: 100 }
+   * );
+   * ```
+   */
+  async batchGetAccounts(
+    addresses: (string | Address)[],
+    options: BatchGetAccountsOptions = {},
+  ): Promise<(AccountInfo | null)[]> {
+    const { batchSize = 100, delayMs = 50 } = options;
+
+    const results: (AccountInfo | null)[] = [];
+    const batches: (string | Address)[][] = [];
+
+    // Split into batches
+    for (let i = 0; i < addresses.length; i += batchSize) {
+      batches.push(addresses.slice(i, i + batchSize));
+    }
+
+    this.logger.debug(
+      `Fetching ${addresses.length} accounts in ${batches.length} batches`,
+    );
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const batchResults = await this.getMultipleAccounts(batch);
+      results.push(...batchResults);
+
+      // Add delay between batches (except for last batch)
+      if (i < batches.length - 1 && delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Batch get accounts with typed decoding and rate limiting
+   *
+   * Combines batch fetching with typed decoding.
+   *
+   * @param addresses Array of account addresses
+   * @param decoder Function to decode account data
+   * @param options Batch options
+   * @returns Array of decoded accounts (null for missing/failed accounts)
+   *
+   * @example
+   * ```typescript
+   * const nftMetadata = await accountService.batchGetAccountsTyped(
+   *   metadataAddresses,
+   *   (data) => decodeMetadata(data),
+   *   { batchSize: 50, delayMs: 100 }
+   * );
+   * ```
+   */
+  async batchGetAccountsTyped<T>(
+    addresses: (string | Address)[],
+    decoder: (data: Uint8Array) => T,
+    options: BatchGetAccountsOptions = {},
+  ): Promise<(T | null)[]> {
+    const accounts = await this.batchGetAccounts(addresses, options);
+
+    return accounts.map((account) => {
+      if (!account) {
+        return null;
+      }
+
+      try {
+        const [base64Data] = account.data;
+        const buffer = Buffer.from(base64Data, 'base64');
+        return decoder(new Uint8Array(buffer));
+      } catch (error) {
+        this.logger.warn('Failed to decode account data', error);
+        return null;
+      }
+    });
+  }
 }
+
+/**
+ * Options for batch account fetching
+ */
+type BatchGetAccountsOptions = {
+  /** Number of accounts to fetch per batch (default: 100) */
+  readonly batchSize?: number;
+  /** Delay in milliseconds between batches (default: 50) */
+  readonly delayMs?: number;
+};
