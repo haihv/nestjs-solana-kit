@@ -3,6 +3,7 @@ export * from './solana-address.service';
 export * from './solana-authority.service';
 export * from './solana-block.service';
 export * from './solana-config.service';
+export * from './solana-event.service';
 export * from './solana-program.service';
 export * from './solana-rpc.service';
 export * from './solana-subscription.service';
