@@ -1,4 +1,5 @@
 export * from './solana-account.service';
+export * from './solana-address.service';
 export * from './solana-block.service';
 export * from './solana-config.service';
 export * from './solana-program.service';
