@@ -3,10 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SolanaBlockService } from './solana-block.service';
 import { SolanaRpcService } from './solana-rpc.service';
 import type { Blockhash } from '@solana/kit';
-
-const createPendingResponse = <T>(value: T) => ({
-  send: vi.fn().mockResolvedValue(value),
-});
+import { createPendingResponse } from '../__tests__/test-fixtures';
 
 interface MockRpc {
   getSlot: Mock;

@@ -14,7 +14,7 @@ import type {
 /**
  * Transaction types for Solana transaction operations
  *
- * All types are derived from @solana/kit v4.x to ensure perfect compatibility
+ * All types are derived from @solana/kit v5.x to ensure perfect compatibility
  * and automatic updates when the SDK changes.
  */
 

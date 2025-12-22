@@ -4,10 +4,7 @@ import { SolanaAccountService } from './solana-account.service';
 import { SolanaRpcService } from './solana-rpc.service';
 import { SolanaUtilsService } from './solana-utils.service';
 import type { Address } from '@solana/kit';
-
-const createPendingResponse = <T>(value: T) => ({
-  send: vi.fn().mockResolvedValue(value),
-});
+import { createPendingResponse } from '../__tests__/test-fixtures';
 
 interface MockRpc {
   getBalance: Mock;
@@ -612,6 +609,229 @@ describe('SolanaAccountService', () => {
 
       const exists = await service.accountExists(addr);
       expect(exists).toBe(true);
+    });
+  });
+
+  describe('getTokenDecimals', () => {
+    const createMintAccountData = (decimals: number): string => {
+      // SPL Token mint layout: 82 bytes total
+      // mint_authority: 36 bytes (COption<Pubkey>)
+      // supply: 8 bytes (u64)
+      // decimals: 1 byte (u8)
+      // is_initialized: 1 byte (bool)
+      // freeze_authority: 36 bytes (COption<Pubkey>)
+      const buffer = Buffer.alloc(82);
+      buffer[44] = decimals;
+      buffer[45] = 1; // is_initialized
+      return buffer.toString('base64');
+    };
+
+    it('should return decimals for valid mint account', async () => {
+      const mintData = createMintAccountData(6);
+      mockRpc.getAccountInfo.mockReturnValue(
+        createPendingResponse({
+          value: {
+            lamports: BigInt(1461600),
+            owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address,
+            executable: false,
+            data: [mintData, 'base64'],
+          },
+        }),
+      );
+
+      const decimals = await service.getTokenDecimals(
+        'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      );
+      expect(decimals).toBe(6);
+    });
+
+    it('should return 9 decimals for SOL-like tokens', async () => {
+      const mintData = createMintAccountData(9);
+      mockRpc.getAccountInfo.mockReturnValue(
+        createPendingResponse({
+          value: {
+            lamports: BigInt(1461600),
+            owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address,
+            executable: false,
+            data: [mintData, 'base64'],
+          },
+        }),
+      );
+
+      const decimals = await service.getTokenDecimals(
+        'So11111111111111111111111111111111111111112',
+      );
+      expect(decimals).toBe(9);
+    });
+
+    it('should throw error for non-existent mint', async () => {
+      mockRpc.getAccountInfo.mockReturnValue(
+        createPendingResponse({ value: null }),
+      );
+
+      await expect(
+        service.getTokenDecimals('11111111111111111111111111111111'),
+      ).rejects.toThrow('Mint account not found');
+    });
+
+    it('should throw error for invalid mint data (too short)', async () => {
+      const shortData = Buffer.alloc(40).toString('base64');
+      mockRpc.getAccountInfo.mockReturnValue(
+        createPendingResponse({
+          value: {
+            lamports: BigInt(1461600),
+            owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address,
+            executable: false,
+            data: [shortData, 'base64'],
+          },
+        }),
+      );
+
+      await expect(
+        service.getTokenDecimals('11111111111111111111111111111111'),
+      ).rejects.toThrow('Invalid mint account data');
+    });
+
+    it('should handle RPC errors', async () => {
+      mockRpc.getAccountInfo.mockReturnValue({
+        send: vi.fn().mockRejectedValue(new Error('RPC error')),
+      });
+
+      await expect(
+        service.getTokenDecimals('11111111111111111111111111111111'),
+      ).rejects.toThrow('RPC error');
+    });
+  });
+
+  describe('batchGetAccounts', () => {
+    it('should fetch accounts in batches', async () => {
+      const addresses = [
+        '11111111111111111111111111111111',
+        'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+      ];
+
+      mockRpc.getMultipleAccounts.mockReturnValue(
+        createPendingResponse({
+          value: [
+            {
+              lamports: BigInt(1000),
+              owner: '11111111111111111111111111111111' as Address,
+              executable: false,
+              data: ['dGVzdA==', 'base64'] as [string, string],
+            },
+            {
+              lamports: BigInt(2000),
+              owner: '11111111111111111111111111111111' as Address,
+              executable: false,
+              data: ['dGVzdDI=', 'base64'] as [string, string],
+            },
+          ],
+        }),
+      );
+
+      const result = await service.batchGetAccounts(addresses);
+
+      expect(result).toHaveLength(2);
+      expect(mockRpc.getMultipleAccounts).toHaveBeenCalledTimes(1);
+    });
+
+    it('should split large arrays into batches', async () => {
+      const addresses = Array(150)
+        .fill(null)
+        .map((_, i) => `11111111111111111111111111111111` as Address);
+
+      mockRpc.getMultipleAccounts.mockReturnValue(
+        createPendingResponse({
+          value: Array(100).fill({
+            lamports: BigInt(1000),
+            owner: '11111111111111111111111111111111' as Address,
+            executable: false,
+            data: ['dGVzdA==', 'base64'] as [string, string],
+          }),
+        }),
+      );
+
+      await service.batchGetAccounts(addresses, { batchSize: 100, delayMs: 0 });
+
+      expect(mockRpc.getMultipleAccounts).toHaveBeenCalledTimes(2);
+    });
+
+    it('should use custom batch options', async () => {
+      const addresses = [
+        '11111111111111111111111111111111',
+        '11111111111111111111111111111112',
+        '11111111111111111111111111111113',
+      ] as Address[];
+
+      mockRpc.getMultipleAccounts.mockReturnValue(
+        createPendingResponse({
+          value: [
+            {
+              lamports: BigInt(1000),
+              owner: '11111111111111111111111111111111' as Address,
+              executable: false,
+              data: ['dGVzdA==', 'base64'] as [string, string],
+            },
+          ],
+        }),
+      );
+
+      await service.batchGetAccounts(addresses, { batchSize: 1, delayMs: 0 });
+
+      expect(mockRpc.getMultipleAccounts).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('batchGetAccountsTyped', () => {
+    it('should decode accounts with provided decoder', async () => {
+      mockRpc.getMultipleAccounts.mockReturnValue(
+        createPendingResponse({
+          value: [
+            {
+              lamports: BigInt(1000),
+              owner: '11111111111111111111111111111111' as Address,
+              executable: false,
+              data: ['dGVzdA==', 'base64'] as [string, string],
+            },
+            null,
+          ],
+        }),
+      );
+
+      const decoder = (data: Uint8Array) => ({ length: data.length });
+      const result = await service.batchGetAccountsTyped(
+        ['11111111111111111111111111111111', '11111111111111111111111111111112'] as Address[],
+        decoder,
+      );
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ length: 4 });
+      expect(result[1]).toBeNull();
+    });
+
+    it('should return null for failed decoding', async () => {
+      mockRpc.getMultipleAccounts.mockReturnValue(
+        createPendingResponse({
+          value: [
+            {
+              lamports: BigInt(1000),
+              owner: '11111111111111111111111111111111' as Address,
+              executable: false,
+              data: ['dGVzdA==', 'base64'] as [string, string],
+            },
+          ],
+        }),
+      );
+
+      const decoder = () => {
+        throw new Error('Decode error');
+      };
+      const result = await service.batchGetAccountsTyped(
+        ['11111111111111111111111111111111'] as Address[],
+        decoder,
+      );
+
+      expect(result[0]).toBeNull();
     });
   });
 });

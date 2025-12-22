@@ -12,13 +12,19 @@ Type-safe NestJS integration for Solana blockchain with `@solana/kit` v5.x. Prov
 - **Type-Safe with Derived Types**: All types are automatically derived from `@solana/kit` using TypeScript utility types (ReturnType, Awaited, Omit, etc.), ensuring perfect compatibility and automatic updates when the SDK changes
 - **NestJS Native**: Designed for NestJS with dependency injection and module configuration
 - **High-Level API**: Simplified methods for common Solana operations
-- **Comprehensive Services**:
-  - Connection management
-  - Account queries and balance checks
-  - Block and slot information
-  - Transaction building, sending, and confirmation with automatic retry logic
-  - Program interactions and instruction creation
-  - WebSocket subscriptions for real-time updates
+- **12 Production-Ready Services**:
+  - `SolanaRpcService` - RPC client management and health checks
+  - `SolanaConfigService` - Centralized configuration management
+  - `SolanaAccountService` - Account queries, balances, token accounts, batch operations
+  - `SolanaBlockService` - Block and epoch information
+  - `SolanaTransactionService` - Transaction building, signing, sending, confirmation
+  - `SolanaSubscriptionService` - WebSocket subscriptions with auto-reconnect
+  - `SolanaUtilsService` - Type conversions, token formatting, legacy SDK compat
+  - `SolanaProgramService` - Program deployment and account queries
+  - `SolanaAddressService` - PDA/ATA derivation utilities
+  - `SolanaAltService` - Address Lookup Table management with caching
+  - `SolanaAuthorityService` - Keypair/signer management and caching
+  - `SolanaEventService` - On-chain event extraction and discriminator utilities
 - **Flexible Configuration**: Both static and async module registration
 - **Production Ready**: Built-in error handling, logging, and retry mechanisms
 
@@ -130,9 +136,117 @@ import { SolanaModule } from 'nestjs-solana-kit';
 export class AppModule {}
 ```
 
+## Usage Examples
+
+### Account Operations
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { SolanaAccountService } from 'nestjs-solana-kit';
+
+@Injectable()
+export class MyService {
+  constructor(private readonly accountService: SolanaAccountService) {}
+
+  async getWalletInfo(address: string) {
+    // Get SOL balance
+    const balance = await this.accountService.getBalanceInSol(address);
+
+    // Get token accounts
+    const tokens = await this.accountService.getTokenAccounts(address);
+
+    // Get token decimals
+    const decimals = await this.accountService.getTokenDecimals(mintAddress);
+
+    // Batch fetch accounts with rate limiting
+    const accounts = await this.accountService.batchGetAccounts(addresses, {
+      batchSize: 100,
+      delayMs: 50,
+    });
+  }
+}
+```
+
+### Transaction Building
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { SolanaTransactionService, SolanaUtilsService } from 'nestjs-solana-kit';
+
+@Injectable()
+export class TransferService {
+  constructor(
+    private readonly txService: SolanaTransactionService,
+    private readonly utilsService: SolanaUtilsService,
+  ) {}
+
+  async buildTransferForClient(userAddress: string, instructions: Instruction[]) {
+    // Create noop signer for client-side signing
+    const userSigner = this.utilsService.toNoopSigner(userAddress);
+
+    // Build unsigned transaction
+    const base64Tx = await this.txService.buildUnsignedBase64({
+      feePayer: userSigner.address,
+      instructions,
+    });
+
+    return { transaction: base64Tx };
+  }
+}
+```
+
+### PDA Derivation
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { SolanaAddressService } from 'nestjs-solana-kit';
+
+@Injectable()
+export class ProgramService {
+  constructor(private readonly addressService: SolanaAddressService) {}
+
+  async getUserPda(programId: string, userAddress: string) {
+    const { address, bump } = await this.addressService.derivePda(
+      programId,
+      ['user_state', userAddress]
+    );
+    return address;
+  }
+
+  async getUserAta(owner: string, mint: string) {
+    return this.addressService.deriveAta(owner, mint);
+  }
+}
+```
+
+### Event Processing
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { SolanaEventService } from 'nestjs-solana-kit';
+
+@Injectable()
+export class EventProcessor {
+  constructor(private readonly eventService: SolanaEventService) {}
+
+  extractEvents(logs: string[]) {
+    // Get event discriminator
+    const discriminator = this.eventService.getEventDiscriminator('TransferEvent');
+
+    // Extract events from transaction logs
+    const events = this.eventService.extractEventsFromLogs(logs, [
+      this.eventService.createEventConfig('TransferEvent', decodeTransferEvent),
+    ]);
+
+    return events;
+  }
+}
+```
+
 ## Documentation
 
-- **[Services Reference](./docs/SERVICES.md)** - Complete API documentation for all services and configuration options
+- **[Services Reference](./docs/SERVICES.md)** - Complete API for all 12 services
+- **[Integration Guide](./docs/ZOMBOX_INTEGRATION.md)** - Migration guide for existing projects
 
 ## CI/CD & Publishing
 

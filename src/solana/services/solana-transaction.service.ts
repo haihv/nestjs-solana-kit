@@ -9,6 +9,13 @@ import {
   getSignatureFromTransaction,
   getBase64EncodedWireTransaction,
   addSignersToTransactionMessage,
+  compileTransactionMessage,
+  getCompiledTransactionMessageEncoder,
+  getCompiledTransactionMessageDecoder,
+  decompileTransactionMessage,
+  getTransactionDecoder,
+  compressTransactionMessageUsingAddressLookupTables,
+  partiallySignTransactionMessageWithSigners,
 } from '@solana/kit';
 import type {
   Address,
@@ -18,6 +25,8 @@ import type {
   Signature,
   Transaction,
   TransactionSigner,
+  TransactionPartialSigner,
+  AddressesByLookupTableAddress,
 } from '@solana/kit';
 import { SolanaRpcService } from './solana-rpc.service';
 import { SolanaBlockService } from './solana-block.service';
@@ -579,21 +588,53 @@ export class SolanaTransactionService {
   }
 
   /**
-   * Get signatures for an address
-   * @param accountAddress The account address
-   * @param limit Maximum number of signatures to return
+   * Get signatures for an address with pagination support
+   *
+   * Retrieves transaction signatures involving the specified address.
+   * Supports pagination for fetching historical transactions.
+   *
+   * @param address The account address to query
+   * @param options Query options
+   * @param options.limit Maximum signatures to return (default: 10)
+   * @param options.before Get signatures before this signature (exclusive)
+   * @param options.until Get signatures until this signature (inclusive)
    * @returns Array of signature information
+   *
+   * @example
+   * ```typescript
+   * // Get latest 20 signatures
+   * const sigs = await transactionService.getSignaturesForAddress(address, { limit: 20 });
+   *
+   * // Paginate through history
+   * const firstPage = await transactionService.getSignaturesForAddress(address, { limit: 50 });
+   * const lastSig = firstPage[firstPage.length - 1].signature;
+   * const secondPage = await transactionService.getSignaturesForAddress(address, {
+   *   limit: 50,
+   *   before: lastSig,
+   * });
+   *
+   * // Get signatures until a known point
+   * const newSigs = await transactionService.getSignaturesForAddress(address, {
+   *   until: lastKnownSignature,
+   * });
+   * ```
    */
   async getSignaturesForAddress(
     address: string | Address,
-    limit = 10,
+    options: GetSignaturesForAddressOptions = {},
   ): Promise<GetSignaturesForAddressResult> {
+    const { limit = 10, before, until } = options;
+
     try {
       const addr = this.utilsService.toAddress(address);
       const rpc = this.rpcService.rpc;
 
       const signatures = await rpc
-        .getSignaturesForAddress(addr, { limit })
+        .getSignaturesForAddress(addr, {
+          limit,
+          before: before ? this.utilsService.toSignature(before) : undefined,
+          until: until ? this.utilsService.toSignature(until) : undefined,
+        })
         .send();
 
       this.logger.debug(
@@ -678,4 +719,457 @@ export class SolanaTransactionService {
       throw error;
     }
   }
+
+  // ============================================================================
+  // Fee Estimation Methods
+  // ============================================================================
+
+  /**
+   * Estimate transaction fee using simulation
+   *
+   * Simulates the transaction to get compute units consumed, then calculates
+   * the base fee. Note: This doesn't include priority fees.
+   *
+   * @param transactionMessage Built transaction message to estimate
+   * @param signers Signers to sign the transaction for simulation
+   * @returns Estimated fee in lamports
+   *
+   * @example
+   * ```typescript
+   * const fee = await transactionService.estimateFee(txMessage, [signer]);
+   * console.log('Estimated fee:', fee, 'lamports');
+   * ```
+   */
+  async estimateFee(
+    transactionMessage: BuiltTransactionMessage,
+    signers: TransactionSigner[],
+  ): Promise<bigint> {
+    const signedTx = await this.signTransactionMessage(transactionMessage, signers);
+    const encodedTx = this.encodeTransaction(signedTx);
+
+    const simulation = await this.simulateTransaction(encodedTx);
+
+    if (simulation.err) {
+      throw new Error(`Simulation failed: ${JSON.stringify(simulation.err)}`);
+    }
+
+    const unitsConsumed = simulation.unitsConsumed ?? 0n;
+    // Base fee is 5000 lamports per signature + compute unit costs
+    // Standard compute unit price is ~1 microlamport per CU
+    const baseFee = 5000n;
+    const computeFee = unitsConsumed / 1000000n; // microlamports to lamports
+
+    return baseFee + computeFee;
+  }
+
+  /**
+   * Estimate priority fee based on recent prioritization fees
+   *
+   * Queries recent prioritization fees for specified accounts to suggest
+   * an appropriate priority fee for timely inclusion.
+   *
+   * @param accountKeys Optional account keys to query fees for
+   * @returns Suggested priority fee in microlamports per compute unit
+   *
+   * @example
+   * ```typescript
+   * const priorityFee = await transactionService.estimatePriorityFee([programId]);
+   * console.log('Suggested priority fee:', priorityFee, 'microlamports/CU');
+   * ```
+   */
+  async estimatePriorityFee(accountKeys?: Address[]): Promise<bigint> {
+    const rpc = this.rpcService.rpc;
+
+    try {
+      const fees = await rpc
+        .getRecentPrioritizationFees(accountKeys)
+        .send();
+
+      if (!fees || fees.length === 0) {
+        return 0n;
+      }
+
+      // Get median of recent fees
+      const sortedFees = [...fees].sort((a, b) =>
+        Number(a.prioritizationFee) - Number(b.prioritizationFee)
+      );
+      const medianIndex = Math.floor(sortedFees.length / 2);
+      const medianFee = sortedFees[medianIndex].prioritizationFee;
+
+      this.logger.debug(`Estimated priority fee: ${medianFee} microlamports/CU`);
+      return medianFee;
+    } catch (error) {
+      this.logger.error('Failed to estimate priority fee', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // Batch Status Methods
+  // ============================================================================
+
+  /**
+   * Get status for multiple signatures at once
+   *
+   * More efficient than calling getTransactionStatus for each signature.
+   *
+   * @param signatures Array of transaction signatures
+   * @returns Array of statuses (null for unknown signatures)
+   *
+   * @example
+   * ```typescript
+   * const statuses = await transactionService.getSignatureStatuses([sig1, sig2, sig3]);
+   * statuses.forEach((status, i) => {
+   *   if (status) {
+   *     console.log(`Tx ${i}: ${status.confirmationStatus}`);
+   *   } else {
+   *     console.log(`Tx ${i}: not found`);
+   *   }
+   * });
+   * ```
+   */
+  async getSignatureStatuses(
+    signatures: (Signature | string)[],
+  ): Promise<readonly (TransactionStatus | null)[]> {
+    const rpc = this.rpcService.rpc;
+    const sigs = signatures.map((s) => this.utilsService.toSignature(s));
+
+    try {
+      const { value: statuses } = await rpc
+        .getSignatureStatuses(sigs, { searchTransactionHistory: true })
+        .send();
+
+      this.logger.debug(`Retrieved status for ${signatures.length} signatures`);
+      return statuses;
+    } catch (error) {
+      this.logger.error('Failed to get signature statuses', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // Client-Side Signing Support
+  // ============================================================================
+
+  /**
+   * Build an unsigned transaction and return as base64
+   *
+   * Creates a transaction message that can be sent to a client for signing.
+   * Useful for wallet-based signing flows where the backend builds the transaction
+   * but the client signs it.
+   *
+   * @param args Transaction building parameters
+   * @returns Base64-encoded unsigned transaction message
+   *
+   * @example
+   * ```typescript
+   * // Backend builds the transaction
+   * const unsignedTx = await transactionService.buildUnsignedBase64({
+   *   instructions: [transferIx],
+   *   feePayer: walletAddress,
+   * });
+   *
+   * // Send to client for signing via API response
+   * res.json({ transaction: unsignedTx });
+   *
+   * // Client signs and sends back
+   * ```
+   */
+  async buildUnsignedBase64(args: BuildTransactionMessageArgs): Promise<string> {
+    const txMessage = await this.buildTransactionMessage(args);
+
+    // Compile and encode the unsigned message
+    const compiledMessage = compileTransactionMessage(txMessage);
+    const encoder = getCompiledTransactionMessageEncoder();
+    const encodedMessage = encoder.encode(compiledMessage);
+
+    // Convert to base64
+    const base64 = Buffer.from(new Uint8Array(encodedMessage)).toString('base64');
+
+    this.logger.debug('Built unsigned transaction base64');
+    return base64;
+  }
+
+  // ============================================================================
+  // Partial Signing (Multi-Sig Support)
+  // ============================================================================
+
+  /**
+   * Partially sign a transaction with some signers
+   *
+   * For multi-sig flows where different parties sign at different times.
+   * Returns a partially signed transaction that can be further signed.
+   *
+   * @param transactionMessage Built transaction message
+   * @param signers Partial signers to apply
+   * @returns Partially signed transaction
+   *
+   * @example
+   * ```typescript
+   * // Party A signs
+   * const partiallySignedA = await transactionService.partiallySign(
+   *   txMessage,
+   *   [signerA]
+   * );
+   *
+   * // Serialize and send to Party B...
+   *
+   * // Party B signs
+   * const fullySigned = await transactionService.partiallySign(
+   *   partiallySignedA.message,
+   *   [signerB]
+   * );
+   *
+   * // Now fully signed, can send
+   * await transactionService.sendTransaction(fullySigned as SignedTransaction);
+   * ```
+   */
+  async partiallySign(
+    transactionMessage: BuiltTransactionMessage,
+    signers: TransactionPartialSigner[],
+  ): Promise<PartiallySignedTransaction> {
+    const txMessageWithSigners = addSignersToTransactionMessage(
+      signers,
+      transactionMessage,
+    );
+
+    const partiallySignedTx = await partiallySignTransactionMessageWithSigners(
+      txMessageWithSigners,
+    );
+
+    this.logger.debug(
+      `Partially signed transaction with ${signers.length} signer(s)`,
+    );
+
+    return {
+      transaction: partiallySignedTx,
+      message: transactionMessage,
+      signedBy: signers.map((s) => s.address),
+    };
+  }
+
+  /**
+   * Check if a transaction has all required signatures
+   *
+   * @param partiallySignedTx The partially signed transaction to check
+   * @returns true if fully signed
+   */
+  isFullySigned(partiallySignedTx: PartiallySignedTransaction): boolean {
+    const { transaction } = partiallySignedTx;
+
+    // Check if all signature slots are filled
+    const signatures = Object.values(transaction.signatures || {});
+    return signatures.every(
+      (sig) => sig !== null && sig !== undefined && sig.length > 0,
+    );
+  }
+
+  // ============================================================================
+  // Address Lookup Table Support
+  // ============================================================================
+
+  /**
+   * Apply Address Lookup Tables to compress a transaction
+   *
+   * Uses ALTs to reduce transaction size by replacing full addresses
+   * with compact indices. Only works with version 0 transaction messages.
+   *
+   * @param transactionMessage Transaction message to compress (must be version 0)
+   * @param addressesByLookupTable Mapping of lookup table addresses to their stored addresses
+   * @returns Compressed transaction message
+   *
+   * @example
+   * ```typescript
+   * // Fetch ALT data
+   * const altInfo = await altService.getAlt(altAddress);
+   *
+   * // Create lookup table mapping
+   * const lookupTables = {
+   *   [altAddress]: altInfo.addresses,
+   * };
+   *
+   * // Compress transaction
+   * const compressedTx = transactionService.compressWithAlt(
+   *   txMessage,
+   *   lookupTables
+   * );
+   *
+   * // Sign and send as usual
+   * const signedTx = await transactionService.signTransactionMessage(
+   *   compressedTx,
+   *   [signer]
+   * );
+   * ```
+   */
+  compressWithAlt<T extends BuiltTransactionMessage & { version: 0 }>(
+    transactionMessage: T,
+    addressesByLookupTable: AddressesByLookupTableAddress,
+  ): T {
+    const compressed = compressTransactionMessageUsingAddressLookupTables(
+      transactionMessage,
+      addressesByLookupTable,
+    );
+
+    const tableCount = Object.keys(addressesByLookupTable).length;
+    this.logger.debug(
+      `Applied ${tableCount} lookup table(s) to transaction`,
+    );
+
+    return compressed as T;
+  }
+
+  // ============================================================================
+  // Instruction Utilities
+  // ============================================================================
+
+  /**
+   * Check if an instruction is for a specific program
+   *
+   * @param instruction The instruction to check
+   * @param programId The program ID to match
+   * @returns true if instruction is for the program
+   */
+  isInstructionForProgram(
+    instruction: Instruction,
+    programId: Address | string,
+  ): boolean {
+    const programAddr = this.utilsService.toAddress(programId);
+    return instruction.programAddress === programAddr;
+  }
+
+  /**
+   * Get all account addresses from an instruction
+   *
+   * @param instruction The instruction
+   * @returns Array of account addresses
+   */
+  getInstructionAccounts(instruction: Instruction): Address[] {
+    if (!instruction.accounts) {
+      return [];
+    }
+
+    return instruction.accounts.map((acc) => acc.address);
+  }
+
+  /**
+   * Get instruction data as Uint8Array
+   *
+   * @param instruction The instruction
+   * @returns Instruction data as bytes, or empty array if none
+   */
+  getInstructionData(instruction: Instruction): Uint8Array {
+    if (!instruction.data) {
+      return new Uint8Array(0);
+    }
+
+    if (instruction.data instanceof Uint8Array) {
+      return new Uint8Array(instruction.data);
+    }
+
+    return new Uint8Array(0);
+  }
+
+  // ============================================================================
+  // Transaction Parsing
+  // ============================================================================
+
+  /**
+   * Decompile a transaction to extract its message and instructions
+   *
+   * Parses a wire-format transaction back into a readable message structure.
+   * Useful for validating transaction contents, extracting instruction data,
+   * or verifying what a client-signed transaction contains.
+   *
+   * @param transaction The transaction to decompile (from getTransaction or decoded)
+   * @param addressesByLookupTable Optional ALT addresses for v0 transactions with lookup tables
+   * @returns Decompiled transaction message with instructions
+   *
+   * @example
+   * ```typescript
+   * // Fetch and decompile a transaction
+   * const txData = await transactionService.getTransaction(signature);
+   * const message = transactionService.decompileTransaction(txData);
+   *
+   * // Find specific program instructions
+   * const programIxs = message.instructions.filter(
+   *   ix => transactionService.isInstructionForProgram(ix, programId)
+   * );
+   *
+   * // With ALT for v0 transactions
+   * const altAddresses = { [altAddress]: altInfo.addresses };
+   * const message = transactionService.decompileTransaction(txData, altAddresses);
+   * ```
+   */
+  decompileTransaction(
+    transaction: Transaction,
+    addressesByLookupTable?: AddressesByLookupTableAddress,
+  ): ReturnType<typeof decompileTransactionMessage> {
+    try {
+      const decompiled = pipe(
+        transaction.messageBytes,
+        getCompiledTransactionMessageDecoder().decode,
+        (compiled) =>
+          addressesByLookupTable
+            ? decompileTransactionMessage(compiled, { addressesByLookupTableAddress: addressesByLookupTable })
+            : decompileTransactionMessage(compiled),
+      );
+
+      this.logger.debug('Decompiled transaction message');
+      return decompiled;
+    } catch (error) {
+      this.logger.error('Failed to decompile transaction', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Decode a base64-encoded transaction
+   *
+   * Converts a base64 wire transaction string back to a Transaction object.
+   *
+   * @param base64Transaction Base64-encoded transaction
+   * @returns Decoded Transaction object
+   *
+   * @example
+   * ```typescript
+   * // Decode a transaction received from a client
+   * const tx = transactionService.decodeTransaction(base64Tx);
+   *
+   * // Then decompile to inspect
+   * const message = transactionService.decompileTransaction(tx);
+   * ```
+   */
+  decodeTransaction(base64Transaction: string): Transaction {
+    try {
+      const bytes = Buffer.from(base64Transaction, 'base64');
+      const transaction = getTransactionDecoder().decode(new Uint8Array(bytes));
+
+      this.logger.debug('Decoded base64 transaction');
+      return transaction;
+    } catch (error) {
+      this.logger.error('Failed to decode transaction', error);
+      throw error;
+    }
+  }
 }
+
+/**
+ * Partially signed transaction result
+ */
+type PartiallySignedTransaction = {
+  readonly transaction: Transaction;
+  readonly message: BuiltTransactionMessage;
+  readonly signedBy: readonly Address[];
+};
+
+/**
+ * Options for getSignaturesForAddress
+ */
+type GetSignaturesForAddressOptions = {
+  /** Maximum number of signatures to return (default: 10) */
+  readonly limit?: number;
+  /** Get signatures before this signature (for pagination) */
+  readonly before?: Signature | string;
+  /** Get signatures until this signature (inclusive) */
+  readonly until?: Signature | string;
+};
