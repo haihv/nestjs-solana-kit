@@ -100,6 +100,31 @@ describe('SolanaSubscriptionService', () => {
       expect(options.cluster).toBe('devnet');
     });
 
+    it('should fallback to devnet URL for unknown cluster', async () => {
+      const unknownClusterOptions = {
+        rpcUrl: 'https://custom.rpc.url',
+        cluster: 'unknown-cluster',
+      };
+      const unknownMockConfig = createMockConfigService(
+        unknownClusterOptions,
+        'unknown-cluster',
+      );
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          SolanaSubscriptionService,
+          { provide: SolanaConfigService, useValue: unknownMockConfig },
+          { provide: SolanaUtilsService, useValue: mockUtilsService },
+        ],
+      }).compile();
+
+      const unknownService = module.get<SolanaSubscriptionService>(
+        SolanaSubscriptionService,
+      );
+      expect(unknownService).toBeDefined();
+      unknownService.unsubscribeAll();
+    });
+
     it('should use custom WebSocket URL when provided', async () => {
       const customOptions = {
         rpcUrl: 'https://api.devnet.solana.com',
@@ -709,6 +734,16 @@ describe('SolanaSubscriptionService', () => {
       // Should have waited at least 10 + 20 = 30ms (with some tolerance)
       expect(elapsed).toBeGreaterThanOrEqual(25);
       expect(subscribeFn).toHaveBeenCalledTimes(3);
+    });
+
+    it('should throw when maxRetries is 0', async () => {
+      const subscribeFn = vi.fn().mockReturnValue(1);
+
+      await expect(
+        service.subscribeWithRetry(subscribeFn, { maxRetries: 0 }),
+      ).rejects.toThrow('Subscription failed: no attempts made');
+
+      expect(subscribeFn).not.toHaveBeenCalled();
     });
   });
 

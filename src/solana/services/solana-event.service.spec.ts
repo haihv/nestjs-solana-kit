@@ -115,6 +115,12 @@ describe('SolanaEventService', () => {
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result!.length).toBe(0);
     });
+
+    it('should return null for invalid base64 data', () => {
+      // Invalid base64 string that will fail to decode
+      const result = service.parseLogData('Program data: !!!invalid-base64!!!');
+      expect(result).toBeNull();
+    });
   });
 
   describe('filterLogsByProgram', () => {
@@ -254,6 +260,25 @@ describe('SolanaEventService', () => {
 
       const events = service.extractEventsFromLogs(logs, [config]);
 
+      expect(events.length).toBe(0);
+    });
+
+    it('should skip data shorter than discriminator length', () => {
+      const disc = service.getEventDiscriminator('TestEvent');
+      // Data with only 3 bytes - shorter than 8-byte discriminator
+      const shortData = Buffer.from([1, 2, 3]).toString('base64');
+
+      const logs = [`Program data: ${shortData}`];
+
+      const config: EventConfig<number> = {
+        name: 'TestEvent',
+        discriminator: disc,
+        decode: (d) => d[0],
+      };
+
+      const events = service.extractEventsFromLogs(logs, [config]);
+
+      // Should not match since data is too short
       expect(events.length).toBe(0);
     });
   });

@@ -206,6 +206,16 @@ describe('BaseTransactionConfirmationService', () => {
         service.confirmTransaction(testSignature, testUserId),
       ).rejects.toThrow('Database error');
     });
+
+    it('should handle non-Error thrown values', async () => {
+      (mockStore.createRecord as ReturnType<typeof vi.fn>).mockRejectedValue(
+        'string error',
+      );
+
+      await expect(
+        service.confirmTransaction(testSignature, testUserId),
+      ).rejects.toBe('string error');
+    });
   });
 
   describe('toResult', () => {
@@ -229,6 +239,17 @@ describe('BaseTransactionConfirmationService', () => {
       const result = await service.confirmTransaction(testSignature, testUserId);
 
       expect(result.data.status).toBe('pending');
+    });
+  });
+
+  describe('short signature handling', () => {
+    it('should handle short signatures without truncation', async () => {
+      const shortSignature = 'short';
+
+      const result = await service.confirmTransaction(shortSignature, testUserId);
+
+      expect(result.status).toBe('processed');
+      expect(service.extractDataMock).toHaveBeenCalledWith(shortSignature);
     });
   });
 });

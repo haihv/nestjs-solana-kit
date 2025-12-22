@@ -334,6 +334,10 @@ export class SolanaEventService {
   }
 
   private base64ToBytes(base64: string): Uint8Array {
+    // Validate base64 format before decoding
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) {
+      throw new Error('Invalid base64 string');
+    }
     return new Uint8Array(Buffer.from(base64, 'base64'));
   }
 

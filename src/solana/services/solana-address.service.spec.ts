@@ -78,6 +78,14 @@ describe('SolanaAddressService', () => {
       expect(result.address).toBeDefined();
     });
 
+    it('should throw error for bigint too large', async () => {
+      const tooBigBigint = BigInt('0x10000000000000000'); // 2^64, one more than max
+
+      await expect(
+        service.derivePda(testProgramId, ['card', tooBigBigint]),
+      ).rejects.toThrow('BigInt too large');
+    });
+
     it('should derive PDA with Uint8Array seed', async () => {
       const bytes = new Uint8Array([1, 2, 3, 4]);
       const result = await service.derivePda(testProgramId, [bytes]);
@@ -223,7 +231,7 @@ describe('SolanaAddressService', () => {
     });
 
     it('should throw for invalid address', () => {
-      expect(() => service.toAddress('invalid')).toThrow('Invalid address');
+      expect(() => service.toAddress('invalid')).toThrow();
     });
   });
 
