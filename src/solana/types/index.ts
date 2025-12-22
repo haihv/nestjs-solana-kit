@@ -1,5 +1,6 @@
 export * from './rpc.types';
 export * from './transaction.types';
+export * from './event.types';
 
 // Re-export commonly used types from @solana/kit for convenience
 export type {

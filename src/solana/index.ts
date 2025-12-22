@@ -4,6 +4,9 @@ export * from './solana.module';
 // Services
 export * from './services';
 
+// Base classes
+export * from './base';
+
 // Interfaces
 export * from './interfaces';
 
