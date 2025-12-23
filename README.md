@@ -1,6 +1,6 @@
 # NestJS Module for Solana Kit
 
-[![Test & Build](https://github.com/haihv/nestjs-solana-kit/actions/workflows/test.yml/badge.svg)](https://github.com/haihv/nestjs-solana-kit/actions/workflows/test.yml)
+[![Test & Build](https://github.com/haihv/nestjs-solana-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/haihv/nestjs-solana-kit/actions/workflows/ci.yml)
 [![npm version](https://badge.fury.io/js/nestjs-solana-kit.svg)](https://badge.fury.io/js/nestjs-solana-kit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
