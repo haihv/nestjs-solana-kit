@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { type Address } from '@solana/kit';
+import { type Address, getBase64Decoder, getBase64Encoder } from '@solana/kit';
 import * as crypto from 'node:crypto';
 
 /**
@@ -52,10 +52,19 @@ export type ParsedLogEntry = {
  * ]);
  * ```
  */
+// Pre-compiled regex patterns for performance
+const PROGRAM_INVOKE_REGEX = /^Program (\w+) invoke/;
+const PROGRAM_SUCCESS_REGEX = /^Program (\w+) success/;
+const PROGRAM_FAILED_REGEX = /^Program (\w+) failed/;
+
 @Injectable()
 export class SolanaEventService {
   private readonly logger = new Logger(SolanaEventService.name);
   private readonly discriminatorCache = new Map<string, Uint8Array>();
+  // getBase64Encoder: string (base64) → Uint8Array (decodes from base64)
+  // getBase64Decoder: Uint8Array → string (base64) (encodes to base64)
+  private readonly base64ToUint8Array = getBase64Encoder();
+  private readonly uint8ArrayToBase64 = getBase64Decoder();
 
   /**
    * Calculate the Anchor-style event discriminator
@@ -257,7 +266,7 @@ export class SolanaEventService {
     const programStack: { programId: Address; logs: string[] }[] = [];
 
     for (const log of logs) {
-      const invokeMatch = log.match(/^Program (\w+) invoke/);
+      const invokeMatch = log.match(PROGRAM_INVOKE_REGEX);
       if (invokeMatch) {
         programStack.push({
           programId: invokeMatch[1] as Address,
@@ -270,8 +279,8 @@ export class SolanaEventService {
         const current = programStack[programStack.length - 1];
         current.logs.push(log);
 
-        const successMatch = log.match(/^Program (\w+) success/);
-        const failedMatch = log.match(/^Program (\w+) failed/);
+        const successMatch = log.match(PROGRAM_SUCCESS_REGEX);
+        const failedMatch = log.match(PROGRAM_FAILED_REGEX);
 
         if (successMatch || failedMatch) {
           const completed = programStack.pop()!;
@@ -330,15 +339,11 @@ export class SolanaEventService {
   }
 
   private bytesToBase64(bytes: Uint8Array): string {
-    return Buffer.from(bytes).toString('base64');
+    return this.uint8ArrayToBase64.decode(bytes);
   }
 
   private base64ToBytes(base64: string): Uint8Array {
-    // Validate base64 format before decoding
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) {
-      throw new Error('Invalid base64 string');
-    }
-    return new Uint8Array(Buffer.from(base64, 'base64'));
+    return new Uint8Array(this.base64ToUint8Array.encode(base64));
   }
 
   private bytesEqual(a: Uint8Array, b: Uint8Array): boolean {

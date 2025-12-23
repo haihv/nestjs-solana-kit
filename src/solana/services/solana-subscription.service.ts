@@ -63,7 +63,6 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
 
       this.subscriptions = createSolanaRpcSubscriptions(wsUrl);
       this.logger.log(`Initialized WebSocket subscriptions at ${wsUrl}`);
-      /* c8 ignore next 3 */
     } catch (error) {
       this.logger.error('Failed to initialize subscriptions', error);
     }
@@ -450,7 +449,6 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
   /**
    * Consume an async generator and call callback for each value
    */
-  /* c8 ignore start */
   private consumeStream<T>(
     stream: AsyncGenerator<T>,
     callback: SubscriptionCallback<T>,
@@ -466,11 +464,12 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
           this.logger.error(`Subscription ${subscriptionId} error:`, error);
         }
       }
+      // Defensive: catches errors if the catch block itself throws
+      /* c8 ignore next 3 */
     })().catch((error) => {
       this.logger.error(`Subscription ${subscriptionId} setup error:`, error);
     });
   }
-  /* c8 ignore stop */
 
   // ============================================================================
   // Retry Helper

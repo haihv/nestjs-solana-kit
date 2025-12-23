@@ -10,6 +10,24 @@ import {
 } from '../__tests__/test-fixtures';
 import type { Address, Signature } from '@solana/kit';
 
+// Track if we should fail initialization
+let shouldFailInit = false;
+
+vi.mock('@solana/kit', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@solana/kit')>();
+  return {
+    ...original,
+    createSolanaRpcSubscriptions: (...args: unknown[]) => {
+      if (shouldFailInit) {
+        throw new Error('WebSocket connection failed');
+      }
+      return original.createSolanaRpcSubscriptions(
+        ...(args as Parameters<typeof original.createSolanaRpcSubscriptions>),
+      );
+    },
+  };
+});
+
 // Mock factory functions
 const createMockConfigService = (
   options: {
@@ -1075,6 +1093,164 @@ describe('SolanaSubscriptionService', () => {
       const b = new Uint8Array([1, 2, 3, 4]);
 
       expect(bytesEqual(a, b)).toBe(true);
+    });
+  });
+
+  describe('consumeStream', () => {
+    it('should call callback for each yielded value', async () => {
+      const consumeStream = (
+        service as unknown as {
+          consumeStream: <T>(
+            stream: AsyncGenerator<T>,
+            callback: (value: T) => Promise<void>,
+            subscriptionId: number,
+          ) => void;
+        }
+      ).consumeStream.bind(service);
+
+      const values = [1, 2, 3];
+      async function* mockGenerator() {
+        for (const v of values) {
+          yield v;
+        }
+      }
+
+      const received: number[] = [];
+      const callback = vi.fn(async (value: number) => {
+        received.push(value);
+      });
+
+      consumeStream(mockGenerator(), callback, 1);
+
+      // Wait for async iteration to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callback).toHaveBeenCalledTimes(3);
+      expect(received).toEqual([1, 2, 3]);
+    });
+
+    it('should handle non-abort errors in stream', async () => {
+      const consumeStream = (
+        service as unknown as {
+          consumeStream: <T>(
+            stream: AsyncGenerator<T>,
+            callback: (value: T) => Promise<void>,
+            subscriptionId: number,
+          ) => void;
+        }
+      ).consumeStream.bind(service);
+
+      async function* errorGenerator() {
+        yield 1;
+        throw new Error('Stream error');
+      }
+
+      const callback = vi.fn();
+      consumeStream(errorGenerator(), callback, 1);
+
+      // Wait for async iteration to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('should silently handle abort errors', async () => {
+      const consumeStream = (
+        service as unknown as {
+          consumeStream: <T>(
+            stream: AsyncGenerator<T>,
+            callback: (value: T) => Promise<void>,
+            subscriptionId: number,
+          ) => void;
+        }
+      ).consumeStream.bind(service);
+
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+
+      async function* abortGenerator() {
+        yield 1;
+        throw abortError;
+      }
+
+      const callback = vi.fn();
+      consumeStream(abortGenerator(), callback, 1);
+
+      // Wait for async iteration to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle setup errors', async () => {
+      const consumeStream = (
+        service as unknown as {
+          consumeStream: <T>(
+            stream: AsyncGenerator<T>,
+            callback: (value: T) => Promise<void>,
+            subscriptionId: number,
+          ) => void;
+        }
+      ).consumeStream.bind(service);
+
+      // Create a generator that throws immediately
+      const brokenGenerator = {
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.reject(new Error('Setup failed')),
+        }),
+      } as unknown as AsyncGenerator<number>;
+
+      const callback = vi.fn();
+      consumeStream(brokenGenerator, callback, 1);
+
+      // Wait for async operation
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('initializeSubscriptions error handling', () => {
+    it('should handle initialization errors gracefully', async () => {
+      // Enable failure mode
+      shouldFailInit = true;
+
+      try {
+        // Create a new module to trigger initialization
+        const testModule = await Test.createTestingModule({
+          providers: [
+            SolanaSubscriptionService,
+            {
+              provide: SolanaConfigService,
+              useValue: createMockConfigService(),
+            },
+            {
+              provide: SolanaUtilsService,
+              useValue: createMockUtilsService(),
+            },
+          ],
+        }).compile();
+
+        const testService = testModule.get<SolanaSubscriptionService>(
+          SolanaSubscriptionService,
+        );
+
+        // Service should be created but subscriptions should be null
+        expect(testService).toBeDefined();
+
+        // Trying to use streams should throw
+        const abortController = new AbortController();
+        await expect(async () => {
+          const generator = testService.accountStream(
+            TEST_ADDRESSES.SYSTEM_PROGRAM,
+            abortController.signal,
+          );
+          await generator.next();
+        }).rejects.toThrow('WebSocket subscriptions not available');
+      } finally {
+        // Reset failure mode
+        shouldFailInit = false;
+      }
     });
   });
 });

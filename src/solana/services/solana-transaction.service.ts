@@ -581,7 +581,6 @@ export class SolanaTransactionService {
       }
 
       return status;
-      /* c8 ignore next 4 */
     } catch (error) {
       this.logger.error(`Failed to get transaction status ${signature}`, error);
       throw error;
@@ -642,7 +641,6 @@ export class SolanaTransactionService {
         `Retrieved ${signatures.length} signatures for ${addr}`,
       );
       return signatures;
-      /* c8 ignore next 7 */
     } catch (error) {
       this.logger.error(
         `Failed to get signatures for address ${address}`,
@@ -671,7 +669,6 @@ export class SolanaTransactionService {
 
       this.logger.debug('Transaction simulation completed');
       return simulation;
-      /* c8 ignore next 4 */
     } catch (error) {
       this.logger.error('Failed to simulate transaction', error);
       throw error;
@@ -695,7 +692,6 @@ export class SolanaTransactionService {
       const signature = getSignatureFromTransaction(tx);
       this.logger.debug(`Got signature: ${signature}`);
       return signature;
-      /* c8 ignore next 4 */
     } catch (error) {
       this.logger.error('Failed to get signature from transaction', error);
       throw error;
@@ -718,7 +714,6 @@ export class SolanaTransactionService {
       const encoded = getBase64EncodedWireTransaction(tx);
       this.logger.debug('Encoded transaction to base64');
       return encoded;
-      /* c8 ignore next 4 */
     } catch (error) {
       this.logger.error('Failed to encode transaction', error);
       throw error;
@@ -745,7 +740,6 @@ export class SolanaTransactionService {
    * console.log('Estimated fee:', fee, 'lamports');
    * ```
    */
-  /* c8 ignore start */
   async estimateFee(
     transactionMessage: BuiltTransactionMessage,
     signers: TransactionSigner[],
@@ -767,7 +761,6 @@ export class SolanaTransactionService {
 
     return baseFee + computeFee;
   }
-  /* c8 ignore stop */
 
   /**
    * Estimate priority fee based on recent prioritization fees
@@ -848,7 +841,6 @@ export class SolanaTransactionService {
 
       this.logger.debug(`Retrieved status for ${signatures.length} signatures`);
       return statuses;
-      /* c8 ignore next 4 */
     } catch (error) {
       this.logger.error('Failed to get signature statuses', error);
       throw error;
@@ -1009,7 +1001,6 @@ export class SolanaTransactionService {
    * );
    * ```
    */
-  /* c8 ignore start */
   compressWithAlt<T extends BuiltTransactionMessage & { version: 0 }>(
     transactionMessage: T,
     addressesByLookupTable: AddressesByLookupTableAddress,
@@ -1026,7 +1017,6 @@ export class SolanaTransactionService {
 
     return compressed as T;
   }
-  /* c8 ignore stop */
 
   // ============================================================================
   // Instruction Utilities
