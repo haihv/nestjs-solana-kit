@@ -160,6 +160,19 @@ describe('BaseOnChainEventListener', () => {
         listener.processEvent(testEvent, testContext),
       ).rejects.toThrow(originalError);
     });
+
+    it('should handle non-Error thrown values', async () => {
+      listener.handleEventMock.mockRejectedValue('string error');
+
+      try {
+        await listener.processEvent(testEvent, testContext);
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(OnChainProcessingError);
+        expect((error as OnChainProcessingError).retryable).toBe(true);
+        expect((error as OnChainProcessingError).cause).toBeUndefined();
+      }
+    });
   });
 
   describe('custom idempotency key', () => {
@@ -232,6 +245,23 @@ describe('BaseOnChainEventListener', () => {
     it('should implement OnChainEventListener interface', () => {
       expect(listener.eventName).toBeDefined();
       expect(typeof listener.processEvent).toBe('function');
+    });
+  });
+
+  describe('short signature handling', () => {
+    it('should handle short signatures without truncation', async () => {
+      const shortContext: OnChainEventContext = {
+        signature: 'short',
+        slot: BigInt(12345),
+        blockTime: 1700000000,
+      };
+
+      listener.handleEventMock.mockResolvedValue(undefined);
+
+      await listener.processEvent(testEvent, shortContext);
+
+      expect(mockStore.isProcessed).toHaveBeenCalledWith('short');
+      expect(listener.handleEventMock).toHaveBeenCalled();
     });
   });
 });

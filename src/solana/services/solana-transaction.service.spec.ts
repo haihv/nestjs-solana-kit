@@ -13,6 +13,7 @@ import type {
   Base64EncodedWireTransaction,
   BlockhashInfo,
   GetSignaturesForAddressResult,
+  PartiallySignedTransaction,
   SimulateTransactionResult,
   TransactionStatus,
 } from '../types';
@@ -72,7 +73,7 @@ describe('SolanaTransactionService', () => {
     mockSimulation = {
       err: null,
       logs: [],
-      unitsConsumed: 500,
+      unitsConsumed: 500n,
       returnData: null,
       accounts: null,
     } as unknown as SimulateTransactionResult;
@@ -319,6 +320,26 @@ describe('SolanaTransactionService', () => {
         expect(result.confirmed).toBe(true);
         expect(result.slot).toBeDefined();
         expect(result.slot).toBe(BigInt(expectedStatus.slot));
+      });
+
+      it('returns undefined slot when status.slot is missing', async () => {
+        const statusNoSlot = {
+          confirmationStatus: 'confirmed' as const,
+          slot: undefined,
+          err: null,
+        };
+        mockRpc.getSignatureStatuses.mockReturnValueOnce(
+          createPendingResponse({ value: [statusNoSlot] }),
+        );
+
+        const result = await service.waitForConfirmation(
+          MOCK_SIGNATURE,
+          BigInt(500),
+          5,
+        );
+
+        expect(result.confirmed).toBe(true);
+        expect(result.slot).toBeUndefined();
       });
     });
 
@@ -1040,6 +1061,11 @@ describe('SolanaTransactionService', () => {
       expect(typeof encoded).toBe('string');
       expect(encoded.length).toBeGreaterThan(0);
     });
+
+    it('should throw and log error for invalid transaction', () => {
+      const invalidTx = { invalid: 'transaction' } as unknown;
+      expect(() => service.encodeTransaction(invalidTx as never)).toThrow();
+    });
   });
 
   describe('buildUnsignedBase64', () => {
@@ -1095,6 +1121,104 @@ describe('SolanaTransactionService', () => {
     });
   });
 
+  describe('estimateFee', () => {
+    it('should return estimated fee from simulation', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      const fee = await service.estimateFee(message, [signer]);
+
+      expect(typeof fee).toBe('bigint');
+      expect(fee).toBeGreaterThanOrEqual(5000n);
+    });
+
+    it('should throw when simulation fails', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      mockRpc.simulateTransaction = vi.fn().mockReturnValue({
+        send: vi.fn().mockResolvedValue({
+          value: { err: { InstructionError: [0, 'InvalidAccountData'] }, logs: [] },
+        }),
+      });
+
+      await expect(service.estimateFee(message, [signer])).rejects.toThrow(
+        'Simulation failed',
+      );
+    });
+
+    it('should handle undefined unitsConsumed', async () => {
+      const signer = await generateKeyPairSigner();
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      mockRpc.simulateTransaction = vi.fn().mockReturnValue({
+        send: vi.fn().mockResolvedValue({
+          value: { err: null, logs: [], unitsConsumed: undefined },
+        }),
+      });
+
+      const fee = await service.estimateFee(message, [signer]);
+
+      // Base fee is 5000n when unitsConsumed is undefined (defaults to 0n)
+      expect(fee).toBe(5000n);
+    });
+  });
+
+  describe('compressWithAlt', () => {
+    it('should compress transaction message with lookup tables', async () => {
+      const signer = await generateKeyPairSigner();
+      const testAddress = address('11111111111111111111111111111111');
+      const ix: Instruction = {
+        programAddress: testAddress,
+        accounts: [
+          { address: testAddress, role: 1 },
+        ],
+        data: new Uint8Array([0, 1, 2, 3]),
+      };
+
+      const message = await service.buildTransactionMessage({
+        feePayer: signer.address,
+        instructions: [ix],
+      });
+
+      const lookupTableAddress = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+      const addressesByLookupTable: AddressesByLookupTableAddress = {
+        [lookupTableAddress]: [testAddress],
+      };
+
+      const compressed = service.compressWithAlt(message, addressesByLookupTable);
+
+      expect(compressed).toBeDefined();
+    });
+  });
+
   describe('getSignature', () => {
     it('should extract signature from signed transaction', async () => {
       const signer = await generateKeyPairSigner();
@@ -1114,6 +1238,11 @@ describe('SolanaTransactionService', () => {
 
       expect(typeof signature).toBe('string');
       expect(signature.length).toBeGreaterThan(0);
+    });
+
+    it('should throw and log error for invalid transaction', () => {
+      const invalidTx = { invalid: 'transaction' } as unknown;
+      expect(() => service.getSignature(invalidTx as never)).toThrow();
     });
   });
 
@@ -1159,6 +1288,15 @@ describe('SolanaTransactionService', () => {
 
       expect(decompiled).toBeDefined();
       expect(decompiled.instructions).toBeDefined();
+    });
+
+    it('should throw error for invalid transaction bytes', () => {
+      const invalidTx = {
+        messageBytes: new Uint8Array([0, 1, 2]), // Invalid transaction bytes
+        signatures: {},
+      } as unknown as Transaction;
+
+      expect(() => service.decompileTransaction(invalidTx)).toThrow();
     });
   });
 
@@ -1207,6 +1345,20 @@ describe('SolanaTransactionService', () => {
 
       expect(isFully).toBe(true);
     });
+
+    it('should handle transaction with undefined signatures', () => {
+      const partialTx = {
+        transaction: {
+          messageBytes: new Uint8Array([1, 2, 3]),
+          signatures: undefined,
+        },
+        signedBy: [],
+      } as unknown as PartiallySignedTransaction;
+
+      const isFully = service.isFullySigned(partialTx);
+
+      expect(isFully).toBe(true);
+    });
   });
 
   describe('instruction utility methods', () => {
@@ -1252,6 +1404,16 @@ describe('SolanaTransactionService', () => {
       expect(accounts[1]).toBe(account2);
     });
 
+    it('getInstructionAccounts should return empty array for undefined accounts', () => {
+      const ix = {
+        programAddress: address('11111111111111111111111111111111'),
+      } as unknown as Instruction;
+
+      const accounts = service.getInstructionAccounts(ix);
+
+      expect(accounts).toEqual([]);
+    });
+
     it('getInstructionData should return instruction data', () => {
       const testData = new Uint8Array([1, 2, 3, 4, 5]);
       const ix: Instruction = {
@@ -1263,6 +1425,29 @@ describe('SolanaTransactionService', () => {
       const data = service.getInstructionData(ix);
 
       expect(data).toEqual(testData);
+    });
+
+    it('getInstructionData should return empty array for undefined data', () => {
+      const ix: Instruction = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+      };
+
+      const data = service.getInstructionData(ix);
+
+      expect(data).toEqual(new Uint8Array(0));
+    });
+
+    it('getInstructionData should return empty array for non-Uint8Array data', () => {
+      const ix = {
+        programAddress: address('11111111111111111111111111111111'),
+        accounts: [],
+        data: [1, 2, 3], // Not a Uint8Array
+      } as unknown as Instruction;
+
+      const data = service.getInstructionData(ix);
+
+      expect(data).toEqual(new Uint8Array(0));
     });
   });
 
@@ -1287,6 +1472,17 @@ describe('SolanaTransactionService', () => {
 
       expect(result).toBeDefined();
     });
+
+    it('should throw and log error on RPC failure', async () => {
+      const rpcError = new Error('RPC simulation error');
+      mockRpc.simulateTransaction = vi.fn().mockReturnValue({
+        send: vi.fn().mockRejectedValue(rpcError),
+      });
+
+      await expect(
+        service.simulateTransaction('fake-tx' as Base64EncodedWireTransaction),
+      ).rejects.toThrow('RPC simulation error');
+    });
   });
 
   describe('getSignatureStatuses', () => {
@@ -1296,6 +1492,17 @@ describe('SolanaTransactionService', () => {
 
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
+    });
+
+    it('should throw and log error on RPC failure', async () => {
+      const rpcError = new Error('RPC status error');
+      mockRpc.getSignatureStatuses = vi.fn().mockReturnValue({
+        send: vi.fn().mockRejectedValue(rpcError),
+      });
+
+      await expect(
+        service.getSignatureStatuses([MOCK_SIGNATURE]),
+      ).rejects.toThrow('RPC status error');
     });
   });
 
@@ -1315,6 +1522,17 @@ describe('SolanaTransactionService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('should throw and log error on RPC failure', async () => {
+      const rpcError = new Error('RPC status error');
+      mockRpc.getSignatureStatuses = vi.fn().mockReturnValue({
+        send: vi.fn().mockRejectedValue(rpcError),
+      });
+
+      await expect(
+        service.getTransactionStatus(MOCK_SIGNATURE),
+      ).rejects.toThrow('RPC status error');
+    });
   });
 
   describe('getSignaturesForAddress', () => {
@@ -1333,6 +1551,38 @@ describe('SolanaTransactionService', () => {
       });
 
       expect(result).toBeDefined();
+    });
+
+    it('should accept before and until options', async () => {
+      const testAddress = address('11111111111111111111111111111111');
+      const beforeSig = '4sGjMKvzttesJQgRHDDMyHVHJJ7TqSYVgv3vhbvVWX8vDM98tKfNGzAvzVdq9XhAD4y7FVJSuZXvZ1qx3hJXWMKs';
+      const untilSig = '5sGjMKvzttesJQgRHDDMyHVHJJ7TqSYVgv3vhbvVWX8vDM98tKfNGzAvzVdq9XhAD4y7FVJSuZXvZ1qx3hJXWMKa';
+
+      const result = await service.getSignaturesForAddress(testAddress, {
+        before: beforeSig,
+        until: untilSig,
+      });
+
+      expect(result).toBeDefined();
+      expect(mockRpc.getSignaturesForAddress).toHaveBeenCalledWith(
+        testAddress,
+        expect.objectContaining({
+          before: expect.any(String),
+          until: expect.any(String),
+        }),
+      );
+    });
+
+    it('should throw and log error on RPC failure', async () => {
+      const rpcError = new Error('RPC signatures error');
+      mockRpc.getSignaturesForAddress = vi.fn().mockReturnValue({
+        send: vi.fn().mockRejectedValue(rpcError),
+      });
+
+      const testAddress = address('11111111111111111111111111111111');
+      await expect(
+        service.getSignaturesForAddress(testAddress),
+      ).rejects.toThrow('RPC signatures error');
     });
   });
 

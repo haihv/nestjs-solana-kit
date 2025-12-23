@@ -703,6 +703,59 @@ describe('SolanaAccountService', () => {
     });
   });
 
+  describe('getMultipleAccountsTyped', () => {
+    it('should decode accounts with provided decoder', async () => {
+      mockRpc.getMultipleAccounts.mockReturnValue(
+        createPendingResponse({
+          value: [
+            {
+              lamports: BigInt(1000),
+              owner: '11111111111111111111111111111111' as Address,
+              executable: false,
+              data: ['dGVzdA==', 'base64'] as [string, string],
+            },
+            null,
+          ],
+        }),
+      );
+
+      const decoder = (data: Uint8Array) => ({ length: data.length });
+      const result = await service.getMultipleAccountsTyped(
+        ['11111111111111111111111111111111', '11111111111111111111111111111112'],
+        decoder,
+      );
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ length: 4 });
+      expect(result[1]).toBeNull();
+    });
+
+    it('should return null for failed decoding', async () => {
+      mockRpc.getMultipleAccounts.mockReturnValue(
+        createPendingResponse({
+          value: [
+            {
+              lamports: BigInt(1000),
+              owner: '11111111111111111111111111111111' as Address,
+              executable: false,
+              data: ['dGVzdA==', 'base64'] as [string, string],
+            },
+          ],
+        }),
+      );
+
+      const decoder = () => {
+        throw new Error('Decode error');
+      };
+      const result = await service.getMultipleAccountsTyped(
+        ['11111111111111111111111111111111'],
+        decoder,
+      );
+
+      expect(result[0]).toBeNull();
+    });
+  });
+
   describe('batchGetAccounts', () => {
     it('should fetch accounts in batches', async () => {
       const addresses = [
@@ -779,6 +832,35 @@ describe('SolanaAccountService', () => {
       await service.batchGetAccounts(addresses, { batchSize: 1, delayMs: 0 });
 
       expect(mockRpc.getMultipleAccounts).toHaveBeenCalledTimes(3);
+    });
+
+    it('should delay between batches when delayMs is set', async () => {
+      const addresses = [
+        '11111111111111111111111111111111',
+        '11111111111111111111111111111112',
+      ] as Address[];
+
+      mockRpc.getMultipleAccounts.mockReturnValue(
+        createPendingResponse({
+          value: [
+            {
+              lamports: BigInt(1000),
+              owner: '11111111111111111111111111111111' as Address,
+              executable: false,
+              data: ['dGVzdA==', 'base64'] as [string, string],
+            },
+          ],
+        }),
+      );
+
+      const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+
+      await service.batchGetAccounts(addresses, { batchSize: 1, delayMs: 10 });
+
+      expect(mockRpc.getMultipleAccounts).toHaveBeenCalledTimes(2);
+      expect(setTimeoutSpy).toHaveBeenCalled();
+
+      setTimeoutSpy.mockRestore();
     });
   });
 

@@ -1503,4 +1503,44 @@ describe('SolanaUtilsService', () => {
       expect(result).toBe('1000000 USDC');
     });
   });
+
+  describe('toNoopSigner', () => {
+    it('should create a noop signer from address string', () => {
+      const addr = '11111111111111111111111111111111';
+      const signer = service.toNoopSigner(addr);
+
+      expect(signer).toBeDefined();
+      expect(signer.address).toBe(addr);
+    });
+
+    it('should create a noop signer from Address type', () => {
+      const addr = kitAddress('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+      const signer = service.toNoopSigner(addr);
+
+      expect(signer).toBeDefined();
+      expect(signer.address).toBe(addr);
+    });
+  });
+
+  describe('toRawAmount', () => {
+    it('should convert display amount to raw amount with 9 decimals', () => {
+      const result = service.toRawAmount(1.5, 9);
+      expect(result).toBe(1500000000n);
+    });
+
+    it('should convert display amount to raw amount with 6 decimals', () => {
+      const result = service.toRawAmount(100.5, 6);
+      expect(result).toBe(100500000n);
+    });
+
+    it('should handle zero amount', () => {
+      const result = service.toRawAmount(0, 9);
+      expect(result).toBe(0n);
+    });
+
+    it('should floor fractional amounts beyond precision', () => {
+      const result = service.toRawAmount(1.123456789123, 6);
+      expect(result).toBe(1123456n);
+    });
+  });
 });

@@ -85,9 +85,7 @@ export class SolanaAddressService {
     programId: Address | string,
     seeds: PdaSeed[],
   ): Promise<PdaAddress> {
-    const programAddress =
-      typeof programId === 'string' ? address(programId) : programId;
-
+    const programAddress = address(programId);
     const encodedSeeds = seeds.map((seed) => this.encodeSeed(seed));
 
     const [pdaAddress, bump] = await getProgramDerivedAddress({
@@ -121,13 +119,10 @@ export class SolanaAddressService {
     mint: Address | string,
     tokenProgram?: Address | string,
   ): Promise<Address> {
-    const ownerAddress =
-      typeof owner === 'string' ? address(owner) : owner;
-    const mintAddress = typeof mint === 'string' ? address(mint) : mint;
+    const ownerAddress = address(owner);
+    const mintAddress = address(mint);
     const tokenProgramAddress = tokenProgram
-      ? typeof tokenProgram === 'string'
-        ? address(tokenProgram)
-        : tokenProgram
+      ? address(tokenProgram)
       : TOKEN_PROGRAM_ADDRESS;
 
     // ATA is a PDA derived from: [owner, tokenProgram, mint]
@@ -160,8 +155,7 @@ export class SolanaAddressService {
    * @returns 32-byte Uint8Array
    */
   addressToBytes(addr: Address | string): Uint8Array {
-    const addressValue = typeof addr === 'string' ? address(addr) : addr;
-    const encoded = this.addressEncoder.encode(addressValue);
+    const encoded = this.addressEncoder.encode(address(addr));
     return new Uint8Array(encoded);
   }
 
@@ -183,10 +177,7 @@ export class SolanaAddressService {
    * @throws Error if invalid address
    */
   toAddress(value: string): Address {
-    if (!isAddress(value)) {
-      throw new Error(`Invalid address: ${value}`);
-    }
-    return value;
+    return address(value);
   }
 
   /**
@@ -208,12 +199,8 @@ export class SolanaAddressService {
       return this.encodeNumber(seed);
     }
 
-    if (typeof seed === 'bigint') {
-      return this.encodeBigInt(seed);
-    }
-
-    // It's an Address type
-    return new Uint8Array(this.addressEncoder.encode(seed));
+    // Must be bigint at this point (TypeScript ensures this via PdaSeed type)
+    return this.encodeBigInt(seed);
   }
 
   /**

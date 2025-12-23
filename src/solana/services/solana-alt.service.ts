@@ -79,8 +79,7 @@ export class SolanaAltService {
    * ```
    */
   async getAlt(altAddress: Address | string, ttlMs?: number): Promise<AltInfo> {
-    const addr =
-      typeof altAddress === 'string' ? address(altAddress) : altAddress;
+    const addr = address(altAddress);
     const key = addr.toString();
 
     const cached = this.cache.get(key);
@@ -107,8 +106,7 @@ export class SolanaAltService {
    * @returns ALT information
    */
   async fetchAlt(altAddress: Address | string): Promise<AltInfo> {
-    const addr =
-      typeof altAddress === 'string' ? address(altAddress) : altAddress;
+    const addr = address(altAddress);
 
     const accountInfo = await this.rpcService.rpc
       .getAccountInfo(addr, { encoding: 'base64' })
@@ -134,7 +132,7 @@ export class SolanaAltService {
     targetAddress: Address | string,
   ): Promise<boolean> {
     const alt = await this.getAlt(altAddress);
-    const target = address(targetAddress as string);
+    const target = address(targetAddress);
 
     return alt.addresses.includes(target);
   }
@@ -151,7 +149,7 @@ export class SolanaAltService {
     targetAddress: Address | string,
   ): Promise<number> {
     const alt = await this.getAlt(altAddress);
-    const target = address(targetAddress as string);
+    const target = address(targetAddress);
 
     return alt.addresses.findIndex((a) => a === target);
   }
@@ -163,8 +161,7 @@ export class SolanaAltService {
    */
   invalidateCache(altAddress?: Address | string): void {
     if (altAddress) {
-      const addr =
-        typeof altAddress === 'string' ? address(altAddress) : altAddress;
+      const addr = address(altAddress);
       this.cache.delete(addr.toString());
       this.logger.debug(`Cache invalidated for ALT: ${addr}`);
     } else {
@@ -235,10 +232,10 @@ export class SolanaAltService {
     payer: Address | string,
     newAddresses: readonly (Address | string)[],
   ): Instruction {
-    const altAddr = address(altAddress as string);
-    const authorityAddr = address(authority as string);
-    const payerAddr = address(payer as string);
-    const addresses = newAddresses.map((a) => address(a as string));
+    const altAddr = address(altAddress);
+    const authorityAddr = address(authority);
+    const payerAddr = address(payer);
+    const addresses = newAddresses.map((a) => address(a));
 
     // Build instruction data for ExtendLookupTable
     const addressBytes = addresses.flatMap((a) => [
@@ -288,15 +285,15 @@ export class SolanaAltService {
 
     // Authority is at offset 22, 32 bytes
     const authorityBytes = data.subarray(22, 54);
+    const addressDecoder = getAddressDecoder();
     const authority = authorityBytes.every((b) => b === 0)
       ? null
-      : (Buffer.from(authorityBytes).toString('base64') as Address);
+      : addressDecoder.decode(authorityBytes);
 
     // Addresses start at offset 56
     const addressesData = data.subarray(56);
     const addresses: Address[] = [];
 
-    const addressDecoder = getAddressDecoder();
     for (let i = 0; i < addressesData.length; i += 32) {
       const addrBytes = addressesData.subarray(i, i + 32);
       if (addrBytes.length === 32) {

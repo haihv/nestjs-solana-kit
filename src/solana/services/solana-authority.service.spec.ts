@@ -52,6 +52,23 @@ describe('SolanaAuthorityService', () => {
     });
   });
 
+  describe('createSignerFromBase58', () => {
+    it('should create signer from base58 private key', async () => {
+      // Create a base58 encoded version of the test key first
+      const signerFromBytes =
+        await service.createSignerFromBytes(testPrivateKeyBytes);
+      const base58Key =
+        '5MaiiCavjCmn9Hs1o3eznqDEhRwxo7pXiAYez7keQUviUkauRiTMD8DrESdrNjN8zd9mTmVhRvBJeg5vhyvgrAhG';
+
+      const signerFromBase58 = await service.createSignerFromBase58(base58Key);
+
+      expect(signerFromBase58).toBeDefined();
+      expect(signerFromBase58.address).toBeDefined();
+      // Both methods should produce valid signers
+      expect(typeof signerFromBase58.address).toBe('string');
+    });
+  });
+
   describe('registerAuthority', () => {
     it('should register authority from bytes', async () => {
       await service.registerAuthority({
@@ -60,6 +77,20 @@ describe('SolanaAuthorityService', () => {
       });
 
       expect(service.hasAuthority('admin')).toBe(true);
+    });
+
+    it('should register authority from base58 string', async () => {
+      const base58Key =
+        '5MaiiCavjCmn9Hs1o3eznqDEhRwxo7pXiAYez7keQUviUkauRiTMD8DrESdrNjN8zd9mTmVhRvBJeg5vhyvgrAhG';
+
+      await service.registerAuthority({
+        type: 'base58Admin',
+        privateKey: base58Key,
+      });
+
+      expect(service.hasAuthority('base58Admin')).toBe(true);
+      const signer = service.getAuthority('base58Admin');
+      expect(signer.address).toBeDefined();
     });
 
     it('should allow retrieving registered authority', async () => {
@@ -214,6 +245,16 @@ describe('SolanaAuthorityService', () => {
     it('should derive address from bytes', async () => {
       const address =
         await service.getAddressFromPrivateKey(testPrivateKeyBytes);
+
+      expect(address).toBeDefined();
+      expect(typeof address).toBe('string');
+    });
+
+    it('should derive address from base58 string', async () => {
+      const base58Key =
+        '5MaiiCavjCmn9Hs1o3eznqDEhRwxo7pXiAYez7keQUviUkauRiTMD8DrESdrNjN8zd9mTmVhRvBJeg5vhyvgrAhG';
+
+      const address = await service.getAddressFromPrivateKey(base58Key);
 
       expect(address).toBeDefined();
       expect(typeof address).toBe('string');
