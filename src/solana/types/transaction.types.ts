@@ -76,6 +76,11 @@ export type SignedTransaction = SendableTransaction &
   TransactionWithLifetime;
 
 /**
+ * Re-export Transaction from @solana/kit for convenience
+ */
+export type { Transaction } from '@solana/kit';
+
+/**
  * Transaction simulation result
  *
  * Derived from @solana/kit's SimulateTransactionApi return value.

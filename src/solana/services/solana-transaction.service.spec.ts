@@ -6,15 +6,18 @@ import { SystemProgram } from '@solana/web3.js';
 
 import { SolanaBlockService } from './solana-block.service';
 import { SolanaRpcService } from './solana-rpc.service';
-import { SolanaTransactionService } from './solana-transaction.service';
+import {
+  SolanaTransactionService,
+  type PartiallySignedTransaction,
+} from './solana-transaction.service';
 import { SolanaUtilsService } from './solana-utils.service';
 import type {
   Address,
   Base64EncodedWireTransaction,
   BlockhashInfo,
   GetSignaturesForAddressResult,
-  PartiallySignedTransaction,
   SimulateTransactionResult,
+  Transaction,
   TransactionStatus,
 } from '../types';
 import { createPendingResponse, TEST_SIGNATURES } from '../__tests__/test-fixtures';
@@ -34,13 +37,14 @@ const createMockRpc = (
     createPendingResponse({ value: simulation }),
   ),
   getTransaction: vi.fn(() => createPendingResponse(null)),
+  getRecentPrioritizationFees: vi.fn(() => createPendingResponse([])),
 });
 
 describe('SolanaTransactionService', () => {
   let service: SolanaTransactionService;
   let utilsService: SolanaUtilsService;
   let mockBlockService: {
-    getLatestBlockhash: Mock<[], Promise<BlockhashInfo>>;
+    getLatestBlockhash: Mock<() => Promise<BlockhashInfo>>;
   };
   let mockRpcService: { rpc: ReturnType<typeof createMockRpc> };
   let mockRpc: ReturnType<typeof createMockRpc>;
@@ -95,7 +99,7 @@ describe('SolanaTransactionService', () => {
     };
     mockBlockService = {
       getLatestBlockhash: vi
-        .fn<[], Promise<BlockhashInfo>>()
+        .fn<() => Promise<BlockhashInfo>>()
         .mockResolvedValue(mockBlockhashInfo),
     };
 
@@ -1213,7 +1217,8 @@ describe('SolanaTransactionService', () => {
         [lookupTableAddress]: [testAddress],
       };
 
-      const compressed = service.compressWithAlt(message, addressesByLookupTable);
+      // Cast needed: compressWithAlt expects v0 message but buildTransactionMessage creates legacy
+      const compressed = service.compressWithAlt(message as never, addressesByLookupTable);
 
       expect(compressed).toBeDefined();
     });
@@ -1466,9 +1471,10 @@ describe('SolanaTransactionService', () => {
       });
 
       const signedTx = await service.signTransactionMessage(message, [signer]);
+      const encodedTx = service.encodeTransaction(signedTx);
 
       // Mock already returns simulation result
-      const result = await service.simulateTransaction(signedTx);
+      const result = await service.simulateTransaction(encodedTx);
 
       expect(result).toBeDefined();
     });

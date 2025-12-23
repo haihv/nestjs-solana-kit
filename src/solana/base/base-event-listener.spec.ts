@@ -18,8 +18,7 @@ class TestEventListener extends BaseOnChainEventListener<TestEvent> {
   readonly eventName = 'TestEvent';
 
   public handleEventMock = vi.fn<
-    [TestEvent, OnChainEventContext],
-    Promise<void>
+    (event: TestEvent, context: OnChainEventContext) => Promise<void>
   >();
 
   protected async handleEvent(
@@ -35,8 +34,7 @@ class CustomIdempotencyListener extends BaseOnChainEventListener<TestEvent> {
   readonly eventName = 'CustomIdempotencyEvent';
 
   public handleEventMock = vi.fn<
-    [TestEvent, OnChainEventContext],
-    Promise<void>
+    (event: TestEvent, context: OnChainEventContext) => Promise<void>
   >();
 
   protected async handleEvent(

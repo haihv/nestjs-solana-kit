@@ -28,10 +28,9 @@ class TestConfirmationService extends BaseTransactionConfirmationService<
   TestRecord,
   TestResult
 > {
-  public extractDataMock = vi.fn<[string], Promise<TestExtractedData>>();
+  public extractDataMock = vi.fn<(signature: string) => Promise<TestExtractedData>>();
   public verifyMock = vi.fn<
-    [string, TestExtractedData],
-    Promise<void>
+    (signature: string, data: TestExtractedData) => Promise<void>
   >();
 
   protected async extractData(signature: string): Promise<TestExtractedData> {

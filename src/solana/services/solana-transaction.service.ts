@@ -1156,7 +1156,7 @@ export class SolanaTransactionService {
 /**
  * Partially signed transaction result
  */
-type PartiallySignedTransaction = {
+export type PartiallySignedTransaction = {
   readonly transaction: Transaction;
   readonly message: BuiltTransactionMessage;
   readonly signedBy: readonly Address[];
