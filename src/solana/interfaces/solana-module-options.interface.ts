@@ -1,9 +1,14 @@
 import { ModuleMetadata, Type } from '@nestjs/common';
+import { Cluster } from '../constants/solana.constants';
 
-export type SolanaCluster = 'mainnet-beta' | 'devnet' | 'testnet' | 'localnet';
+/**
+ * @deprecated Use `Cluster` from constants instead
+ */
+export type SolanaCluster = Cluster;
+
 export type SolanaCommitment = 'processed' | 'confirmed' | 'finalized';
 
-export interface SolanaModuleOptions {
+export type SolanaModuleOptions = {
   /**
    * The RPC URL for connecting to Solana
    * @example 'https://api.mainnet-beta.solana.com'
@@ -11,10 +16,10 @@ export interface SolanaModuleOptions {
   rpcUrl: string;
 
   /**
-   * The Solana cluster to connect to
-   * @default 'mainnet-beta'
+   * The Solana cluster to connect to (auto-detected if not provided)
+   * @default auto-detected via getGenesisHash(), falls back to 'mainnet-beta'
    */
-  cluster?: SolanaCluster;
+  cluster?: Cluster;
 
   /**
    * The commitment level for queries
@@ -45,7 +50,7 @@ export interface SolanaModuleOptions {
    * @default 30000
    */
   timeout?: number;
-}
+};
 
 export interface SolanaModuleOptionsFactory {
   createSolanaModuleOptions():
@@ -53,10 +58,8 @@ export interface SolanaModuleOptionsFactory {
     | SolanaModuleOptions;
 }
 
-export interface SolanaModuleAsyncOptions extends Pick<
-  ModuleMetadata,
-  'imports'
-> {
+export interface SolanaModuleAsyncOptions
+  extends Pick<ModuleMetadata, 'imports'> {
   useExisting?: Type<SolanaModuleOptionsFactory>;
   useClass?: Type<SolanaModuleOptionsFactory>;
   useFactory?: (

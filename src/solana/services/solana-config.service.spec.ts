@@ -1,8 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { vi } from 'vitest';
 import { SolanaConfigService } from './solana-config.service';
 import { SOLANA_MODULE_OPTIONS } from '../constants/solana.constants';
 import { TEST_RPC_OPTIONS } from '../__tests__/test-fixtures';
 import type { SolanaModuleOptions } from '../interfaces/solana-module-options.interface';
+
+// Mock for RPC-based cluster detection tests
+const mockGetGenesisHash = vi.fn();
+vi.mock('@solana/kit', () => ({
+  createSolanaRpc: vi.fn(() => ({
+    getGenesisHash: () => ({
+      send: mockGetGenesisHash,
+    }),
+  })),
+}));
 
 describe('SolanaConfigService', () => {
   let service: SolanaConfigService;
@@ -576,6 +587,301 @@ describe('SolanaConfigService', () => {
 
       expect(service).toBeDefined();
       expect(service).toBeInstanceOf(SolanaConfigService);
+    });
+  });
+
+  describe('Cluster auto-detection', () => {
+    it('should skip auto-detection when cluster is explicitly provided', async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: TEST_RPC_OPTIONS.DEVNET,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      expect(service.clusterName).toBe('devnet');
+    });
+
+    it('should detect localnet from localhost URL without RPC call', async () => {
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'http://localhost:8899',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      expect(service.clusterName).toBe('localnet');
+    });
+
+    it('should detect localnet from 127.0.0.1 URL without RPC call', async () => {
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'http://127.0.0.1:8899',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      expect(service.clusterName).toBe('localnet');
+    });
+
+    it('should default to mainnet-beta before auto-detection completes', async () => {
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'https://custom-rpc.example.com',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+
+      // Before onModuleInit, should return default
+      expect(service.clusterName).toBe('mainnet-beta');
+    });
+
+    it('should prioritize explicit cluster over auto-detection', async () => {
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'http://localhost:8899',
+        cluster: 'devnet', // Explicit override
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      // Explicit cluster takes precedence over URL-based detection
+      expect(service.clusterName).toBe('devnet');
+    });
+
+    it('should cache detected cluster and return it on subsequent calls', async () => {
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'http://localhost:8899',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+
+      // First call detects localnet
+      await service.onModuleInit();
+      expect(service.clusterName).toBe('localnet');
+
+      // Second call should use cached value
+      await service.onModuleInit();
+      expect(service.clusterName).toBe('localnet');
+    });
+
+    it('should handle concurrent detection calls by returning the same promise', async () => {
+      // Use non-localhost URL to trigger RPC-based detection
+      mockGetGenesisHash.mockResolvedValue(
+        'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',
+      );
+
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'https://custom-rpc.example.com',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+
+      // Call onModuleInit concurrently - both should use the same promise
+      const [result1, result2] = await Promise.all([
+        service.onModuleInit(),
+        service.onModuleInit(),
+      ]);
+
+      // Both should complete successfully
+      expect(result1).toBeUndefined();
+      expect(result2).toBeUndefined();
+      expect(service.clusterName).toBe('devnet');
+
+      // RPC should only be called once due to promise caching
+      expect(mockGetGenesisHash).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Cluster auto-detection with RPC', () => {
+    beforeEach(() => {
+      mockGetGenesisHash.mockReset();
+    });
+
+    it('should detect devnet cluster from genesis hash', async () => {
+      mockGetGenesisHash.mockResolvedValue(
+        'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',
+      );
+
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'https://custom-devnet-rpc.example.com',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      expect(service.clusterName).toBe('devnet');
+    });
+
+    it('should detect mainnet-beta cluster from genesis hash', async () => {
+      mockGetGenesisHash.mockResolvedValue(
+        '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d',
+      );
+
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'https://custom-mainnet-rpc.example.com',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      expect(service.clusterName).toBe('mainnet-beta');
+    });
+
+    it('should detect testnet cluster from genesis hash', async () => {
+      mockGetGenesisHash.mockResolvedValue(
+        '4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY',
+      );
+
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'https://custom-testnet-rpc.example.com',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      expect(service.clusterName).toBe('testnet');
+    });
+
+    it('should default to mainnet-beta for unknown genesis hash', async () => {
+      mockGetGenesisHash.mockResolvedValue('UnknownGenesisHash123456789');
+
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'https://unknown-network-rpc.example.com',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      expect(service.clusterName).toBe('mainnet-beta');
+    });
+
+    it('should fallback to mainnet-beta when RPC call fails', async () => {
+      mockGetGenesisHash.mockRejectedValue(new Error('RPC connection failed'));
+
+      const options: SolanaModuleOptions = {
+        rpcUrl: 'https://failing-rpc.example.com',
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          {
+            provide: SOLANA_MODULE_OPTIONS,
+            useValue: options,
+          },
+          SolanaConfigService,
+        ],
+      }).compile();
+
+      service = module.get<SolanaConfigService>(SolanaConfigService);
+      await service.onModuleInit();
+
+      expect(service.clusterName).toBe('mainnet-beta');
     });
   });
 });

@@ -1,9 +1,14 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { SOLANA_MODULE_OPTIONS } from '../constants/solana.constants';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { createSolanaRpc } from '@solana/kit';
 import {
-  SolanaModuleOptions,
-  SolanaCluster,
-} from '../interfaces/solana-module-options.interface';
+  SOLANA_MODULE_OPTIONS,
+  GENESIS_HASH_TO_CLUSTER,
+  Cluster,
+  CLUSTERS,
+} from '../constants/solana.constants';
+import { SolanaModuleOptions } from '../interfaces/solana-module-options.interface';
+
+const DEFAULT_CLUSTER: Cluster = CLUSTERS.MAINNET;
 
 /**
  * SolanaConfigService - Manages Solana module configuration
@@ -11,30 +16,100 @@ import {
  * This service centralizes all configuration-related concerns,
  * allowing other services to access cluster and RPC settings
  * without being tightly coupled to the RPC service.
+ *
+ * Supports automatic cluster detection via getGenesisHash() RPC call.
+ * If cluster is explicitly provided, it takes precedence over auto-detection.
  */
 @Injectable()
-export class SolanaConfigService {
+export class SolanaConfigService implements OnModuleInit {
   private readonly logger = new Logger(SolanaConfigService.name);
-  private readonly cluster: SolanaCluster;
   private readonly moduleOptions: SolanaModuleOptions;
+  private detectedCluster: Cluster | null = null;
+  private clusterDetectionPromise: Promise<Cluster> | null = null;
 
   constructor(
     @Inject(SOLANA_MODULE_OPTIONS)
     options: SolanaModuleOptions,
   ) {
     this.moduleOptions = options;
-    this.cluster = options.cluster || 'mainnet-beta';
-    this.logger.log(
-      `Solana configuration initialized for cluster: ${this.cluster}`,
-    );
+
+    if (options.cluster) {
+      this.logger.log(
+        `Solana configuration initialized with explicit cluster: ${options.cluster}`,
+      );
+    } else {
+      this.logger.log(
+        'Solana configuration initialized, cluster will be auto-detected',
+      );
+    }
+  }
+
+  /**
+   * NestJS lifecycle hook - auto-detect cluster on module initialization
+   */
+  async onModuleInit(): Promise<void> {
+    if (!this.moduleOptions.cluster) {
+      try {
+        const cluster = await this.detectCluster();
+        this.logger.log(`Auto-detected cluster: ${cluster}`);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to auto-detect cluster, defaulting to mainnet-beta: ${error}`,
+        );
+        this.detectedCluster = DEFAULT_CLUSTER;
+      }
+    }
+  }
+
+  /**
+   * Detect cluster from RPC endpoint using getGenesisHash()
+   * Results are cached after first detection
+   */
+  private async detectCluster(): Promise<Cluster> {
+    if (this.detectedCluster) {
+      return this.detectedCluster;
+    }
+
+    // Prevent concurrent detection calls
+    if (this.clusterDetectionPromise) {
+      return this.clusterDetectionPromise;
+    }
+
+    this.clusterDetectionPromise = this.performClusterDetection();
+    return this.clusterDetectionPromise;
+  }
+
+  private async performClusterDetection(): Promise<Cluster> {
+    // Check for localnet URL patterns first (no RPC call needed)
+    const url = this.moduleOptions.rpcUrl.toLowerCase();
+    if (url.includes('localhost') || url.includes('127.0.0.1')) {
+      this.detectedCluster = 'localnet';
+      return this.detectedCluster;
+    }
+
+    const rpc = createSolanaRpc(this.moduleOptions.rpcUrl);
+    const genesisHash = await rpc.getGenesisHash().send();
+
+    const cluster: Cluster =
+      GENESIS_HASH_TO_CLUSTER[genesisHash] ?? DEFAULT_CLUSTER;
+
+    this.detectedCluster = cluster;
+    return cluster;
   }
 
   /**
    * Get the current cluster
-   * @returns The current cluster (mainnet-beta, devnet, testnet, localnet, etc.)
+   *
+   * Returns explicit cluster if provided in options, otherwise returns
+   * the auto-detected cluster. Falls back to DEFAULT_CLUSTER if detection
+   * hasn't completed yet.
+   *
+   * @returns The current cluster (mainnet-beta, devnet, testnet, localnet)
    */
-  get clusterName(): SolanaCluster {
-    return this.cluster;
+  get clusterName(): Cluster {
+    return (
+      this.moduleOptions.cluster || this.detectedCluster || DEFAULT_CLUSTER
+    );
   }
 
   /**

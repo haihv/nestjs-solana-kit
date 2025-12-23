@@ -101,7 +101,7 @@ import { SolanaModule } from 'nestjs-solana-kit';
   imports: [
     SolanaModule.register({
       rpcUrl: 'https://api.devnet.solana.com',
-      cluster: 'devnet',
+      // cluster is auto-detected via getGenesisHash() if not provided
       commitment: 'confirmed',
     }),
   ],
@@ -125,7 +125,7 @@ import { SolanaModule } from 'nestjs-solana-kit';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         rpcUrl: configService.get('SOLANA_RPC_URL'),
-        cluster: configService.get('SOLANA_CLUSTER'),
+        // cluster is optional - auto-detected if not provided
         commitment: 'confirmed',
         wsUrl: configService.get('SOLANA_WS_URL'),
       }),
@@ -134,6 +134,48 @@ import { SolanaModule } from 'nestjs-solana-kit';
   ],
 })
 export class AppModule {}
+```
+
+### 3. Cluster Auto-Detection
+
+The library automatically detects the cluster from your RPC endpoint using `getGenesisHash()`:
+
+```typescript
+// Works with any RPC provider (Helius, QuickNode, Alchemy, etc.)
+SolanaModule.register({
+  rpcUrl: 'https://my-helius-endpoint.com/api-key',
+  // No cluster needed - auto-detected!
+})
+
+// Explicit cluster takes precedence (skips RPC call)
+SolanaModule.register({
+  rpcUrl: 'https://my-helius-endpoint.com/api-key',
+  cluster: 'devnet', // Override auto-detection
+})
+
+// Localhost URLs are detected as 'localnet' without RPC call
+SolanaModule.register({
+  rpcUrl: 'http://localhost:8899',
+  // Automatically detected as 'localnet'
+})
+```
+
+**Detection priority:**
+1. Explicit `cluster` option (if provided)
+2. `localhost`/`127.0.0.1` URLs → `localnet`
+3. `getGenesisHash()` RPC call → maps to known clusters
+4. Falls back to `mainnet-beta` if detection fails
+
+### 4. Cluster Type
+
+Use the `Cluster` type and `CLUSTERS` constant for type-safe cluster references:
+
+```typescript
+import { CLUSTERS, Cluster } from 'nestjs-solana-kit';
+
+// Type-safe cluster values
+const myCluster: Cluster = CLUSTERS.DEVNET;  // 'devnet'
+const mainnet: Cluster = CLUSTERS.MAINNET;   // 'mainnet-beta'
 ```
 
 ## Usage Examples
