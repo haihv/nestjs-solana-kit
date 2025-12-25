@@ -10,11 +10,27 @@
  *
  * Contains blockchain-specific metadata about when/where the event occurred.
  * Decoupled from any database or application-specific concerns.
+ *
+ * The generic type parameter T allows specifying the transaction type when needed.
+ * Default is `unknown` for flexibility - consumers can narrow to their preferred type.
+ *
+ * @example
+ * ```typescript
+ * // Basic usage (transaction is optional)
+ * function handleEvent(context: OnChainEventContext) {
+ *   console.log('Slot:', context.slot);
+ * }
+ *
+ * // With typed transaction (e.g., base64-encoded versioned transaction)
+ * import { TransactionForFullBase64 } from '@solana/kit';
+ * type MyContext = OnChainEventContext<TransactionForFullBase64<0>>;
+ * ```
  */
-export type OnChainEventContext = {
+export type OnChainEventContext<T = unknown> = {
   readonly signature: string;
   readonly slot: bigint;
   readonly blockTime: number | null;
+  readonly transaction?: T;
 };
 
 /**
