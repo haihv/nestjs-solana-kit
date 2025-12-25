@@ -1,7 +1,7 @@
 {
   "name": "nestjs-solana-kit",
   "version": "0.2.0",
-  "description": "NestJS module for Solana blockchain integration with @solana/kit - RPC, transactions, subscriptions, and utilities",
+  "description": "Production-ready NestJS module for Solana blockchain. Built on @solana/kit v5.x with 12 services: RPC, accounts, transactions, subscriptions, PDAs, ALTs, and more. Full TypeScript support with derived types.",
   "author": "haihv",
   "license": "MIT",
   "main": "dist/index.js",
@@ -19,17 +19,21 @@
   "keywords": [
     "nestjs",
     "solana",
+    "solana-kit",
     "blockchain",
     "web3",
-    "solana-kit",
-    "solana-web3",
-    "solana-rpc",
-    "solana-transaction",
-    "solana-subscription",
-    "websocket",
-    "crypto",
     "typescript",
-    "dependency-injection"
+    "rpc",
+    "transactions",
+    "websocket",
+    "subscriptions",
+    "pda",
+    "spl-token",
+    "address-lookup-table",
+    "anchor",
+    "dapp",
+    "defi",
+    "nft"
   ],
   "repository": {
     "type": "git",

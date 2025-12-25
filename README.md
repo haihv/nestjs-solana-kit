@@ -287,61 +287,18 @@ export class EventProcessor {
 
 ## Documentation
 
-- **[Services Reference](./docs/SERVICES.md)** - Complete API for all 12 services
-- **[Integration Guide](./docs/ZOMBOX_INTEGRATION.md)** - Migration guide for existing projects
+- **[Services Reference](./docs/SERVICES.md)** - Complete API documentation for all 12 services
 
-## CI/CD & Publishing
-
-This repository uses GitHub Actions for automated testing and publishing:
-
-- **Test Workflow** (`test.yml`): Runs on every push and pull request
-  - Tests on Node 18 and 20
-  - Linting, unit tests, and build verification
-  - Code coverage reports uploaded to Codecov
-
-- **Publish Workflow** (`publish.yml`): Triggered on version tags (v*.*.*)
-  - Runs full test suite before publishing
-  - Automatically publishes to npm
-  - Creates GitHub releases
-
-### Publishing a New Version
+## Contributing
 
 ```bash
-# 1. Create and push a version tag
-git tag v0.2.0
-git push origin v0.2.0
-
-# GitHub Actions will automatically:
-# - Run all tests
-# - Build the package
-# - Publish to npm
-# - Create a GitHub release
+npm install      # Install dependencies
+npm test         # Run tests
+npm run lint     # Lint code
+npm run build    # Build package
 ```
 
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Generate test coverage
-npm run test:cov
-
-# Lint code
-npm run lint
-
-# Format code
-npm run format
-
-# Build package
-npm run build
-```
+Pre-commit hooks run type-check and lint-staged automatically.
 
 ## License
 

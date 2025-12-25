@@ -192,7 +192,7 @@ WebSocket subscriptions for real-time updates.
 
 ## SolanaUtilsService
 
-Compatibility layer between @solana/web3.js v1.x and @solana/kit v4.x.
+Compatibility layer between @solana/web3.js v1.x and @solana/kit v5.x.
 
 **Transaction Building:**
 - `buildTransaction(args: BuildTransactionArgs)`: Build unsigned transaction with automatic blockhash fetching
@@ -259,3 +259,92 @@ Program queries and interactions.
   - Returns: `number`
 - `getProgramOwner(programId)`: Get program owner/upgrade authority
   - Returns: `Address`
+
+## SolanaAddressService
+
+PDA and ATA address derivation utilities.
+
+**Methods:**
+- `derivePda(programId, seeds)`: Derive a Program Derived Address
+  - Seeds: `Uint8Array | string | Address | number | bigint`
+  - Returns: `{ address: Address, bump: number }`
+- `deriveAta(owner, mint, tokenProgram?)`: Derive Associated Token Account
+  - Returns: `Address`
+- `isValidAddress(value)`: Check if string is valid Solana address
+  - Returns: `boolean`
+- `addressToBytes(addr)`: Convert address to 32-byte Uint8Array
+  - Returns: `Uint8Array`
+- `bytesToAddress(bytes)`: Convert bytes to address
+  - Returns: `Address`
+- `toAddress(value)`: Create typed Address from string
+  - Returns: `Address`
+
+## SolanaAltService
+
+Address Lookup Table management with caching.
+
+**Methods:**
+- `getAlt(altAddress, ttlMs?)`: Get ALT with TTL-based caching
+  - Returns: `AltInfo`
+- `fetchAlt(altAddress)`: Fetch ALT directly (bypasses cache)
+  - Returns: `AltInfo`
+- `hasAddress(altAddress, targetAddress)`: Check if address exists in ALT
+  - Returns: `boolean`
+- `getAddressIndex(altAddress, targetAddress)`: Get index of address in ALT
+  - Returns: `number`
+- `invalidateCache(altAddress?)`: Invalidate cache (specific or all)
+- `getCacheStats()`: Get cache statistics
+  - Returns: `{ size: number, entries: Array }`
+- `cleanExpiredCache()`: Remove expired cache entries
+  - Returns: `number`
+- `buildExtendInstruction(altAddress, authority, payer, newAddresses)`: Build ALT extend instruction
+  - Returns: `Instruction`
+
+## SolanaAuthorityService
+
+Keypair and signer management with caching.
+
+**Methods:**
+- `registerAuthority(config)`: Register an authority keypair
+  - Config: `{ type: string, privateKey: string | Uint8Array }`
+- `getAuthority(type)`: Get cached signer by type
+  - Returns: `KeyPairSigner`
+- `getAuthorityAddress(type)`: Get authority address
+  - Returns: `Address`
+- `hasAuthority(type)`: Check if authority is registered
+  - Returns: `boolean`
+- `getRegisteredTypes()`: Get all registered authority types
+  - Returns: `string[]`
+- `unregisterAuthority(type)`: Remove an authority
+  - Returns: `boolean`
+- `clearAll()`: Clear all registered authorities
+- `createSignerFromBytes(bytes)`: Create signer from private key bytes
+  - Returns: `Promise<KeyPairSigner>`
+- `createSignerFromBase58(base58)`: Create signer from base58 private key
+  - Returns: `Promise<KeyPairSigner>`
+- `getAddressFromPrivateKey(privateKey)`: Derive address from private key
+  - Returns: `Promise<Address>`
+
+## SolanaEventService
+
+On-chain event extraction and decoding utilities.
+
+**Methods:**
+- `getEventDiscriminator(eventName)`: Calculate Anchor-style event discriminator
+  - Returns: `Uint8Array` (8 bytes)
+- `getEventDiscriminatorBase64(eventName)`: Get discriminator as base64
+  - Returns: `string`
+- `matchesDiscriminator(data, eventName)`: Check if data matches event discriminator
+  - Returns: `boolean`
+- `extractEventsFromLogs(logs, eventConfigs)`: Extract events from transaction logs
+  - Returns: `ExtractedEvent[]`
+- `filterLogsByProgram(logs, programId)`: Filter logs by program
+  - Returns: `string[]`
+- `parseLogData(log)`: Parse "Program data:" log entry
+  - Returns: `Uint8Array | null`
+- `parseLogsByProgram(logs)`: Group logs by program execution
+  - Returns: `ParsedLogEntry[]`
+- `extractAllDataLogs(logs)`: Extract all data logs
+  - Returns: `Uint8Array[]`
+- `createEventConfig(name, decode)`: Create event config helper
+  - Returns: `EventConfig`
