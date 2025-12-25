@@ -52,7 +52,12 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage 2>/dev/null",
     "prepublishOnly": "npm run type-check && npm run build && npm run test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "preversion": "npm run type-check && npm run test",
+    "postversion": "git push --follow-tags",
+    "release:patch": "npm version patch -m 'release: v%s'",
+    "release:minor": "npm version minor -m 'release: v%s'",
+    "release:major": "npm version major -m 'release: v%s'"
   },
   "dependencies": {
     "@solana/compat": "^5.1.0",
