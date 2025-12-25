@@ -1,6 +1,6 @@
 {
   "name": "nestjs-solana-kit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Production-ready NestJS module for Solana blockchain. Built on @solana/kit v5.x with 12 services: RPC, accounts, transactions, subscriptions, PDAs, ALTs, and more. Full TypeScript support with derived types.",
   "author": "haihv",
   "license": "MIT",
