@@ -332,6 +332,23 @@ describe('SolanaEventService', () => {
       expect(entries[1].programId).toBe(prog2);
     });
 
+    it('should ignore logs outside program invocations', () => {
+      const prog = 'Program111111111111111111111111111111111';
+
+      const logs = [
+        'Log before any invoke',
+        `Program ${prog} invoke [1]`,
+        'Program log: inside invoke',
+        `Program ${prog} success`,
+      ];
+
+      const entries = service.parseLogsByProgram(logs);
+
+      expect(entries.length).toBe(1);
+      expect(entries[0].programId).toBe(prog);
+      expect(entries[0].logs).not.toContain('Log before any invoke');
+    });
+
     it('should handle failed programs', () => {
       const prog = 'FailedProgram1111111111111111111111111';
 

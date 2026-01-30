@@ -96,7 +96,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
    * }
    * ```
    */
-  /* c8 ignore start */
+  /* v8 ignore start -- @preserve */
   async *accountStream(
     accountAddress: string | Address,
     abortSignal: AbortSignal,
@@ -115,7 +115,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
       yield notification;
     }
   }
-  /* c8 ignore stop */
+  /* v8 ignore stop -- @preserve */
 
   /**
    * Stream slot change notifications
@@ -131,8 +131,10 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
    * }
    * ```
    */
-  /* c8 ignore start */
-  async *slotStream(abortSignal: AbortSignal): AsyncGenerator<SlotNotification> {
+  /* v8 ignore start -- @preserve */
+  async *slotStream(
+    abortSignal: AbortSignal,
+  ): AsyncGenerator<SlotNotification> {
     this.ensureSubscriptionsAvailable();
 
     this.logger.debug('Starting slot stream');
@@ -146,7 +148,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
       yield slot;
     }
   }
-  /* c8 ignore stop */
+  /* v8 ignore stop -- @preserve */
 
   /**
    * Stream signature notifications (transaction confirmation)
@@ -164,7 +166,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
    * }
    * ```
    */
-  /* c8 ignore start */
+  /* v8 ignore start -- @preserve */
   async *signatureStream(
     signature: string | Signature,
     abortSignal: AbortSignal,
@@ -183,7 +185,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
       yield notification;
     }
   }
-  /* c8 ignore stop */
+  /* v8 ignore stop -- @preserve */
 
   /**
    * Stream program account change notifications
@@ -200,7 +202,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
    * }
    * ```
    */
-  /* c8 ignore start */
+  /* v8 ignore start -- @preserve */
   async *programAccountStream(
     programId: string | Address,
     abortSignal: AbortSignal,
@@ -219,7 +221,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
       yield notification;
     }
   }
-  /* c8 ignore stop */
+  /* v8 ignore stop -- @preserve */
 
   /**
    * Stream logs notifications for an address
@@ -236,7 +238,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
    * }
    * ```
    */
-  /* c8 ignore start */
+  /* v8 ignore start -- @preserve */
   async *logsStream(
     accountAddress: string | Address,
     abortSignal: AbortSignal,
@@ -255,7 +257,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
       yield logs;
     }
   }
-  /* c8 ignore stop */
+  /* v8 ignore stop -- @preserve */
 
   /**
    * Stream program logs with optional discriminator filtering
@@ -279,7 +281,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
    * }
    * ```
    */
-  /* c8 ignore start */
+  /* v8 ignore start -- @preserve */
   async *programLogsStream(
     programId: string | Address,
     abortSignal: AbortSignal,
@@ -310,7 +312,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
       yield logs;
     }
   }
-  /* c8 ignore stop */
+  /* v8 ignore stop -- @preserve */
 
   // ============================================================================
   // Callback Methods (Convenience API)
@@ -351,11 +353,7 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
     const id = ++this.subscriptionCounter;
     this.activeSubscriptions.set(id, abortController);
 
-    this.consumeStream(
-      this.slotStream(abortController.signal),
-      callback,
-      id,
-    );
+    this.consumeStream(this.slotStream(abortController.signal), callback, id);
 
     this.logger.log(`Subscribed to slot changes (ID: ${id})`);
     return id;
@@ -464,11 +462,11 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
           this.logger.error(`Subscription ${subscriptionId} error:`, error);
         }
       }
-      // Defensive: catches errors if the catch block itself throws
-      /* c8 ignore next 3 */
+      /* v8 ignore start -- @preserve */
     })().catch((error) => {
       this.logger.error(`Subscription ${subscriptionId} setup error:`, error);
     });
+    /* v8 ignore stop -- @preserve */
   }
 
   // ============================================================================
@@ -593,10 +591,11 @@ export class SolanaSubscriptionService implements OnModuleDestroy {
             }
           }
         }
-        /* c8 ignore next 3 */
+        /* v8 ignore start -- @preserve */
       } catch {
         // Defensive: Buffer.from with 'base64' is permissive and won't throw
       }
+      /* v8 ignore stop -- @preserve */
     }
 
     return false;

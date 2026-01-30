@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { vi } from 'vitest';
-import { type Address, getAddressEncoder, getAddressDecoder } from '@solana/kit';
+import {
+  type Address,
+  getAddressEncoder,
+  getAddressDecoder,
+} from '@solana/kit';
 
 import { SolanaAltService } from './solana-alt.service';
 import { SolanaRpcService } from './solana-rpc.service';
@@ -15,8 +19,7 @@ describe('SolanaAltService', () => {
 
   // Use real valid Solana addresses for testing
   const testAltAddress = '11111111111111111111111111111111' as Address;
-  const testAddress1 =
-    'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
+  const testAddress1 = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
   const testAddress2 =
     'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' as Address;
 
@@ -31,7 +34,11 @@ describe('SolanaAltService', () => {
   };
 
   const createMockAltData = (options: MockAltOptions = {}) => {
-    const { addresses = [], deactivationSlot = null, authority = null } = options;
+    const {
+      addresses = [],
+      deactivationSlot = null,
+      authority = null,
+    } = options;
 
     // Header: 56 bytes
     // Addresses: 32 bytes each
@@ -206,6 +213,30 @@ describe('SolanaAltService', () => {
       expect(removed).toBe(1);
       expect(service.getCacheStats().size).toBe(0);
     });
+
+    it('should not remove non-expired entries', async () => {
+      await service.getAlt(testAltAddress);
+
+      const removed = service.cleanExpiredCache();
+
+      expect(removed).toBe(0);
+      expect(service.getCacheStats().size).toBe(1);
+    });
+
+    it('should only remove expired entries from mixed cache', async () => {
+      const otherAlt = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' as Address;
+
+      // One entry with immediate expiration, one with long TTL
+      await service.getAlt(testAltAddress, 1);
+      await service.getAlt(otherAlt);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const removed = service.cleanExpiredCache();
+
+      expect(removed).toBe(1);
+      expect(service.getCacheStats().size).toBe(1);
+    });
   });
 
   describe('hasAddress', () => {
@@ -304,7 +335,10 @@ describe('SolanaAltService', () => {
       mockRpcService.rpc.getAccountInfo = vi.fn().mockReturnValue({
         send: vi.fn().mockResolvedValue({
           value: {
-            data: [createMockAltData({ deactivationSlot: BigInt(12345) }), 'base64'],
+            data: [
+              createMockAltData({ deactivationSlot: BigInt(12345) }),
+              'base64',
+            ],
             owner: 'AddressLookupTab1e1111111111111111111111111',
             lamports: 1000000,
             executable: false,
@@ -355,6 +389,32 @@ describe('SolanaAltService', () => {
       const alt = await service.fetchAlt(testAltAddress);
 
       expect(alt.authority).toBeNull();
+    });
+
+    it('should skip trailing incomplete address data', async () => {
+      // Create data with 56-byte header + 32-byte valid address + 10-byte trailing data
+      const data = Buffer.alloc(56 + 32 + 10);
+      data.writeUint32LE(1, 0);
+      data.writeBigUint64LE(BigInt('18446744073709551615'), 4);
+      data.writeBigUint64LE(BigInt(100), 12);
+      // Write one valid address at offset 56
+      Buffer.from(new Uint8Array(32).fill(1)).copy(data, 56);
+
+      mockRpcService.rpc.getAccountInfo = vi.fn().mockReturnValue({
+        send: vi.fn().mockResolvedValue({
+          value: {
+            data: [data.toString('base64'), 'base64'],
+            owner: 'AddressLookupTab1e1111111111111111111111111',
+            lamports: 1000000,
+            executable: false,
+            rentEpoch: 0,
+          },
+        }),
+      });
+
+      const alt = await service.fetchAlt(testAltAddress);
+
+      expect(alt.addresses).toHaveLength(1);
     });
 
     it('should handle ALT with multiple addresses', async () => {
