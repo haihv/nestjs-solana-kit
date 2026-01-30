@@ -45,22 +45,3 @@ jobs:
         with:
           files: coverage/lcov.info
           fail_ci_if_error: true
-
-      - name: Coverage summary
-        if: always()
-        run: |
-          echo "## Coverage Report (Node ${{ matrix.node-version }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f coverage/coverage-summary.json ]; then
-            node -e "
-              const c = require('./coverage/coverage-summary.json').total;
-              console.log('| Metric | Coverage |');
-              console.log('|--------|----------|');
-              console.log('| Statements | ' + c.statements.pct + '% |');
-              console.log('| Branches | ' + c.branches.pct + '% |');
-              console.log('| Functions | ' + c.functions.pct + '% |');
-              console.log('| Lines | ' + c.lines.pct + '% |');
-            " >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Coverage report not found" >> $GITHUB_STEP_SUMMARY
-          fi
