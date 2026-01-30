@@ -20,6 +20,7 @@ import {
 import type {
   Address,
   Base64EncodedWireTransaction,
+  Commitment,
   Instruction,
   SendTransactionApi,
   Signature,
@@ -49,6 +50,10 @@ type BuildTransactionMessageArgs = {
 
   /** Transaction fee payer address */
   readonly feePayer: Address | string;
+};
+
+type GetTransactionArgs = {
+  readonly commitment?: Commitment;
 };
 
 type SendTransactionOptions = Omit<
@@ -529,17 +534,45 @@ export class SolanaTransactionService {
   }
 
   /**
-   * Get transaction details
+   * Get transaction details with parsed instructions
+   *
+   * Fetches complete transaction information including metadata, parsed instructions,
+   * and address table lookups for versioned transactions.
+   *
    * @param signature Transaction signature
+   * @param args Optional query parameters
+   * @param args.commitment Commitment level (default: 'confirmed')
    * @returns Transaction details or null if not found
+   *
+   * @example
+   * ```typescript
+   * // Basic usage
+   * const tx = await transactionService.getTransaction(signature);
+   * if (tx) {
+   *   console.log('Slot:', tx.slot);
+   *   console.log('Version:', tx.version);
+   *   console.log('Instructions:', tx.transaction.message.instructions);
+   * }
+   *
+   * // With finalized commitment
+   * const finalizedTx = await transactionService.getTransaction(signature, {
+   *   commitment: 'finalized',
+   * });
+   * ```
    */
-  async getTransaction(signature: Signature | string): Promise<any> {
+  async getTransaction(
+    signature: Signature | string,
+    args: GetTransactionArgs = {},
+  ) {
+    const { commitment = 'confirmed' } = args;
+
     try {
       const rpc = this.rpcService.rpc;
       const sig = this.utilsService.toSignature(signature);
 
       const transaction = await rpc
         .getTransaction(sig, {
+          commitment,
           encoding: 'jsonParsed',
           maxSupportedTransactionVersion: 0,
         })
@@ -551,6 +584,8 @@ export class SolanaTransactionService {
       }
 
       this.logger.debug(`Retrieved transaction ${sig}`);
+      // Type assertion needed because TypeScript picks the wrong overload
+      // for getTransaction when deriving return types
       return transaction;
     } catch (error) {
       this.logger.error(`Failed to get transaction ${signature}`, error);
@@ -744,7 +779,10 @@ export class SolanaTransactionService {
     transactionMessage: BuiltTransactionMessage,
     signers: TransactionSigner[],
   ): Promise<bigint> {
-    const signedTx = await this.signTransactionMessage(transactionMessage, signers);
+    const signedTx = await this.signTransactionMessage(
+      transactionMessage,
+      signers,
+    );
     const encodedTx = this.encodeTransaction(signedTx);
 
     const simulation = await this.simulateTransaction(encodedTx);
@@ -781,22 +819,22 @@ export class SolanaTransactionService {
     const rpc = this.rpcService.rpc;
 
     try {
-      const fees = await rpc
-        .getRecentPrioritizationFees(accountKeys)
-        .send();
+      const fees = await rpc.getRecentPrioritizationFees(accountKeys).send();
 
       if (!fees || fees.length === 0) {
         return 0n;
       }
 
       // Get median of recent fees
-      const sortedFees = [...fees].sort((a, b) =>
-        Number(a.prioritizationFee) - Number(b.prioritizationFee)
+      const sortedFees = fees.toSorted(
+        (a, b) => Number(a.prioritizationFee) - Number(b.prioritizationFee),
       );
       const medianIndex = Math.floor(sortedFees.length / 2);
       const medianFee = sortedFees[medianIndex].prioritizationFee;
 
-      this.logger.debug(`Estimated priority fee: ${medianFee} microlamports/CU`);
+      this.logger.debug(
+        `Estimated priority fee: ${medianFee} microlamports/CU`,
+      );
       return medianFee;
     } catch (error) {
       this.logger.error('Failed to estimate priority fee', error);
@@ -875,7 +913,9 @@ export class SolanaTransactionService {
    * // Client signs and sends back
    * ```
    */
-  async buildUnsignedBase64(args: BuildTransactionMessageArgs): Promise<string> {
+  async buildUnsignedBase64(
+    args: BuildTransactionMessageArgs,
+  ): Promise<string> {
     const txMessage = await this.buildTransactionMessage(args);
 
     // Compile and encode the unsigned message
@@ -884,7 +924,9 @@ export class SolanaTransactionService {
     const encodedMessage = encoder.encode(compiledMessage);
 
     // Convert to base64
-    const base64 = Buffer.from(new Uint8Array(encodedMessage)).toString('base64');
+    const base64 = Buffer.from(new Uint8Array(encodedMessage)).toString(
+      'base64',
+    );
 
     this.logger.debug('Built unsigned transaction base64');
     return base64;
@@ -933,9 +975,8 @@ export class SolanaTransactionService {
       transactionMessage,
     );
 
-    const partiallySignedTx = await partiallySignTransactionMessageWithSigners(
-      txMessageWithSigners,
-    );
+    const partiallySignedTx =
+      await partiallySignTransactionMessageWithSigners(txMessageWithSigners);
 
     this.logger.debug(
       `Partially signed transaction with ${signers.length} signer(s)`,
@@ -1011,9 +1052,7 @@ export class SolanaTransactionService {
     );
 
     const tableCount = Object.keys(addressesByLookupTable).length;
-    this.logger.debug(
-      `Applied ${tableCount} lookup table(s) to transaction`,
-    );
+    this.logger.debug(`Applied ${tableCount} lookup table(s) to transaction`);
 
     return compressed as T;
   }
@@ -1110,7 +1149,9 @@ export class SolanaTransactionService {
         getCompiledTransactionMessageDecoder().decode,
         (compiled) =>
           addressesByLookupTable
-            ? decompileTransactionMessage(compiled, { addressesByLookupTableAddress: addressesByLookupTable })
+            ? decompileTransactionMessage(compiled, {
+                addressesByLookupTableAddress: addressesByLookupTable,
+              })
             : decompileTransactionMessage(compiled),
       );
 

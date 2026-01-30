@@ -20,7 +20,10 @@ import type {
   Transaction,
   TransactionStatus,
 } from '../types';
-import { createPendingResponse, TEST_SIGNATURES } from '../__tests__/test-fixtures';
+import {
+  createPendingResponse,
+  TEST_SIGNATURES,
+} from '../__tests__/test-fixtures';
 
 const MOCK_SIGNATURE = TEST_SIGNATURES.SECONDARY;
 
@@ -240,7 +243,9 @@ describe('SolanaTransactionService', () => {
 
   it('fetches signatures for an address via RPC', async () => {
     const voteAccount = address('Vote111111111111111111111111111111111111111');
-    const signatures = await service.getSignaturesForAddress(voteAccount, { limit: 5 });
+    const signatures = await service.getSignaturesForAddress(voteAccount, {
+      limit: 5,
+    });
 
     expect(signatures).toEqual(mockSignatures);
     expect(mockRpc.getSignaturesForAddress).toHaveBeenCalledWith(voteAccount, {
@@ -769,6 +774,7 @@ describe('SolanaTransactionService', () => {
 
       expect(typedResult).toEqual(mockTransaction);
       expect(mockRpc.getTransaction).toHaveBeenCalledWith(validSignature, {
+        commitment: 'confirmed',
         encoding: 'jsonParsed',
         maxSupportedTransactionVersion: 0,
       });
@@ -1040,7 +1046,9 @@ describe('SolanaTransactionService', () => {
 
     it('should throw on malformed transaction data', () => {
       // Valid base64 but not a valid transaction
-      const invalidTx = Buffer.from('not a valid transaction').toString('base64');
+      const invalidTx = Buffer.from('not a valid transaction').toString(
+        'base64',
+      );
       expect(() => service.decodeTransaction(invalidTx)).toThrow();
     });
   });
@@ -1160,7 +1168,10 @@ describe('SolanaTransactionService', () => {
 
       mockRpc.simulateTransaction = vi.fn().mockReturnValue({
         send: vi.fn().mockResolvedValue({
-          value: { err: { InstructionError: [0, 'InvalidAccountData'] }, logs: [] },
+          value: {
+            err: { InstructionError: [0, 'InvalidAccountData'] },
+            logs: [],
+          },
         }),
       });
 
@@ -1201,9 +1212,7 @@ describe('SolanaTransactionService', () => {
       const testAddress = address('11111111111111111111111111111111');
       const ix: Instruction = {
         programAddress: testAddress,
-        accounts: [
-          { address: testAddress, role: 1 },
-        ],
+        accounts: [{ address: testAddress, role: 1 }],
         data: new Uint8Array([0, 1, 2, 3]),
       };
 
@@ -1212,13 +1221,18 @@ describe('SolanaTransactionService', () => {
         instructions: [ix],
       });
 
-      const lookupTableAddress = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+      const lookupTableAddress = address(
+        'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+      );
       const addressesByLookupTable: AddressesByLookupTableAddress = {
         [lookupTableAddress]: [testAddress],
       };
 
       // Cast needed: compressWithAlt expects v0 message but buildTransactionMessage creates legacy
-      const compressed = service.compressWithAlt(message as never, addressesByLookupTable);
+      const compressed = service.compressWithAlt(
+        message as never,
+        addressesByLookupTable,
+      );
 
       expect(compressed).toBeDefined();
     });
@@ -1380,7 +1394,9 @@ describe('SolanaTransactionService', () => {
 
     it('isInstructionForProgram should return false for non-matching program', () => {
       const programId = address('11111111111111111111111111111111');
-      const otherProgram = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+      const otherProgram = address(
+        'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+      );
       const ix: Instruction = {
         programAddress: programId,
         accounts: [],
@@ -1561,8 +1577,10 @@ describe('SolanaTransactionService', () => {
 
     it('should accept before and until options', async () => {
       const testAddress = address('11111111111111111111111111111111');
-      const beforeSig = '4sGjMKvzttesJQgRHDDMyHVHJJ7TqSYVgv3vhbvVWX8vDM98tKfNGzAvzVdq9XhAD4y7FVJSuZXvZ1qx3hJXWMKs';
-      const untilSig = '5sGjMKvzttesJQgRHDDMyHVHJJ7TqSYVgv3vhbvVWX8vDM98tKfNGzAvzVdq9XhAD4y7FVJSuZXvZ1qx3hJXWMKa';
+      const beforeSig =
+        '4sGjMKvzttesJQgRHDDMyHVHJJ7TqSYVgv3vhbvVWX8vDM98tKfNGzAvzVdq9XhAD4y7FVJSuZXvZ1qx3hJXWMKs';
+      const untilSig =
+        '5sGjMKvzttesJQgRHDDMyHVHJJ7TqSYVgv3vhbvVWX8vDM98tKfNGzAvzVdq9XhAD4y7FVJSuZXvZ1qx3hJXWMKa';
 
       const result = await service.getSignaturesForAddress(testAddress, {
         before: beforeSig,
@@ -1591,5 +1609,4 @@ describe('SolanaTransactionService', () => {
       ).rejects.toThrow('RPC signatures error');
     });
   });
-
 });
