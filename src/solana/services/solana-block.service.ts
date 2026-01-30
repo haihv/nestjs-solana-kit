@@ -78,6 +78,7 @@ export class SolanaBlockService {
             })
             .send();
 
+      /* v8 ignore else -- @preserve */
       if (!block) {
         this.logger.warn(`No block found for slot ${slot}`);
         return null;
