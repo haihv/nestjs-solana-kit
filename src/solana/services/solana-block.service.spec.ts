@@ -408,6 +408,13 @@ describe('SolanaBlockService', () => {
       expect(result).toBeNull();
     });
 
+    it('should handle null block with includeTransactions false', async () => {
+      mockRpc.getBlock.mockReturnValue(createPendingResponse(null));
+
+      const result = await service.getBlock(BigInt(999999), false);
+      expect(result).toBeNull();
+    });
+
     it('should handle RPC errors', async () => {
       mockRpc.getBlock.mockReturnValue({
         send: vi.fn().mockRejectedValue(new Error('RPC error')),
